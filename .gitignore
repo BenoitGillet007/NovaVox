@@ -1,0 +1,43 @@
+# ---------------------------------------------------------------
+# NovaVox — fichiers générés/locaux à ne jamais versionner
+# ---------------------------------------------------------------
+
+# Build PyInstaller / Inno Setup
+dist/
+build/
+Output/
+*.spec
+
+# Environnement Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# Modèles téléchargés (trop volumineux pour Git — Vosk fait ~1,4 Go)
+model/
+piper/
+
+# Sauvegardes automatiques et journaux
+backups/
+erreurs.log
+crash_log.txt
+
+# Réglages et données propres à CETTE machine/cet utilisateur
+# (chacun les régénère automatiquement au premier lancement)
+window_config.json
+audio_config.json
+overlay_config.json
+profiles/
+profiles_config.json
+
+# Éventuels fichiers de config perso (décommente si tu ne veux pas
+# partager tes commandes/réglages IA personnels dans le dépôt)
+# commands.json
+# ai_config.json
+
+# Divers éditeurs / OS
+.vscode/
+.idea/
+Thumbs.db
+.DS_Store

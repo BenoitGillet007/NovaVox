@@ -1,0 +1,131 @@
+NOVAVOX — Notes de mise à jour
+==============================
+v0.1.7
+------
+- Mise à jour de l’overlay : le fond clignote en vert lorsqu’une commande est exécutée et en rouge lorsque le micro est coupé.
+- Annulation d'écho (expérimental) : nouvelle option dans les réglages audio pour empêcher le son du PC (vidéo, jeu...) d'être capté par erreur comme de la voix.
+      -Soustrait en temps réel le son actuellement joué par le PC de ce que capte le micro, même principe que Discord/Zoom/Teams.
+      -Repose sur "Mixage stéréo" comme signal de référence (doit être activé côté Windows : Paramètres son → Enregistrement → Afficher les périphériques désactivés → Activer).
+      -Case à cocher dédiée dans les réglages audio, désactivée par défaut ; état sauvegardé entre les sessions.
+      -Se combine avec le seuil de sensibilité micro existant plutôt que de le remplacer.
+- réorganisation des differentes options
+v0.1.6
+------
+-Débug chargement des configuration game.log
+v0.1.5
+------
+- Nouvel onglet dédié « 🛰 Game.log » dans la barre du haut, séparé de
+  l'Assistant IA et des Réglages : regroupe tout ce qui concerne la
+  surveillance du Game.log (activation, pseudo RSI, phrases annoncées,
+  corrections de lecture) au même endroit.
+- Phrases annoncées personnalisables pour chaque type d'événement du
+  Game.log (route tracée, départ en saut quantique, arrivée à
+  destination, notification HUD) : le texte lu à voix haute pour chacun
+  peut désormais être modifié depuis l'onglet Game.log, avec des champs
+  comme {dest} ou {zone} remplacés automatiquement à l'annonce.
+      -Bouton « Réinitialiser » par phrase pour revenir au texte par
+       défaut.
+      -Un gabarit personnalisé cassé (accolade mal fermée, etc.) retombe
+       silencieusement sur le texte par défaut plutôt que de faire
+       planter l'annonce.
+- Corrections de lecture pour des notifications HUD précises : possibilité
+  de faire lire un texte différent de celui affiché par le jeu pour une
+  notification donnée (ex. remplacer une formulation par une autre plus
+  claire à l'oral).
+      -Détection et ajout automatiques : dès qu'une notification jamais
+       vue apparaît dans le Game.log, elle est ajoutée toute seule à la
+       liste des corrections (avec le texte brut comme valeur de départ,
+       donc aucun changement de comportement tant qu'elle n'est pas
+       personnalisée) — plus besoin de la copier-coller soi-même depuis
+       le journal.
+      -Mise à jour en direct de la liste si l'onglet Game.log est déjà
+       ouvert au moment où une nouvelle notification est détectée.
+      -Ajout manuel également possible si le texte exact est déjà connu
+       à l'avance.
+- Indicateurs visuels sur les phrases et corrections de lecture :
+      -🔴 Rouge dès qu'un champ est modifié mais pas encore enregistré.
+      -🟠 Orange pour une correction tout juste ajoutée automatiquement
+       et jamais encore personnalisée.
+      -Les deux indicateurs disparaissent dès que la ligne est
+       enregistrée.
+- Sauvegarde et export : les phrases personnalisées et les corrections de
+  lecture sont enregistrées dans ai_config.json comme le reste des
+  réglages IA — elles persistent donc entre deux lancements de l'appli, et
+  sont incluses automatiquement dans l'export/import de configuration
+  (aucune action supplémentaire nécessaire).
+v0.1.4
+------
+débug selection du péripherique de la voix
+v0.1.3
+------
+- Overlay
+      -Possibilité de choisir quelles lignes afficher ou masquer (heure, écoute, micro, IA, phrase reconnue, zone, dernière commande), via des cases à cocher visibles uniquement en mode « Déplacer ».
+      -Le statut du micro passe en rouge quand il est coupé, au lieu du gris neutre partagé avec les autres lignes inactives — plus visible d'un coup d'œil pendant que tu joues.
+- Réordonnement des commandes à la souris : les commandes (et les titres de groupe) peuvent désormais être déplacées en les faisant glisser de haut en bas dans la liste — un clic sur la poignée « ⠿ » pour prendre la commande, un second clic à l'endroit voulu pour la lâcher.
+- Synthèse vocale (TTS) : lecture entièrement revue pour réduire les fuites audio captées par le micro pendant que Nova (ou tout autre son de l'appli) parle.
+      -La voix n'est plus jouée via PowerShell/Windows Media Player, mais directement par l'appli (sounddevice) — élimine toute dépendance au périphérique de sortie « par défaut » de Windows, qui pouvait varier d'un lancement à l'autre.
+      -Nouveau réglage de volume dédié à la voix (atténuation appliquée avant lecture, indépendante du volume système), qui réduit nettement le risque que la voix ressorte plus fort que le reste de l'audio et fuite dans le micro (crosstalk casque/micro).
+      -Possibilité de choisir un périphérique de sortie audio dédié pour la voix (comme il est déjà possible de choisir le micro d'entrée).
+      -Coupure de la voix en cours (« <nom de l'IA>, stop ») toujours aussi réactive qu'avant.
+v0.1.2
+------
+- Vérification automatique des mises à jour : au lancement, l'appli compare silencieusement sa version à celle disponible en ligne. Si une nouvelle version existe, une bannière apparaît en bas de l'écran avec un bouton « Télécharger » qui ouvre le lien de l'installeur.
+      -Vérification passive et silencieuse : aucun impact si le serveur est injoignable (pas de connexion, hors ligne...), et l'appli continue de fonctionner normalement dans tous les cas.
+      -Ne remplace jamais l'exécutable en cours d'exécution automatiquement : c'est toujours l'utilisateur qui lance l'installeur téléchargé, pour rester fiable.
+- Répétition automatique des touches : possibilité de configurer une commande pour qu'elle enfonce sa touche plusieurs fois de suite au lieu d'un seul appui.
+      -Nouvelle case « Répéter la touche plusieurs fois » dans le
+       sélecteur de touche, avec réglage du nombre de répétitions et
+       du délai entre chaque.
+      -Un badge 🔁 indique dans la liste des commandes qu'une touche
+       est configurée en répétition.
+      -Tourne sur son propre thread : les délais entre répétitions ne
+       gèlent jamais la reconnaissance vocale pendant l'exécution.
+- Correction de la reconnaissance de commandes : quand deux phrases se ressemblent (ex. « trois plus » et « trois plus trois »), c'est désormais toujours la phrase la PLUS LONGUE et la plus précise qui est reconnue, peu importe l'ordre des commandes dans la liste — au lieu de systématiquement déclencher la commande la plus courte.
+
+v0.1.1
+------
+- Nouvel overlay en jeu : petite fenêtre superposée à Star Citizen,
+  toujours au premier plan, affichant en direct l'heure, l'état du
+  micro, la dernière phrase reconnue, le statut de l'assistant IA, la
+  zone/destination actuelle et la dernière commande vocale exécutée.
+      -Fenêtre totalement séparée du processus de Star Citizen : aucune injection dans le jeu, aucun risque pour l'anti-triche.
+      -Mode « Déplacer » (glisser librement à la souris) et mode « Verrouillé » (clic-traversant : ne gêne jamais les clics dans le jeu en dessous).
+      -Activation et position mémorisées entre les sessions : l'overlay se rouvre automatiquement au même endroit à chaque lancement.
+      -Réglable depuis les Réglages (case à cocher « Overlay en jeu » + bouton « Déplacer l'overlay »).
+      -La dernière commande vocale exécutée remplace l'affichage précédent, au lieu de s'accumuler dans une liste.
+- Profils de commandes multiples : possibilité de créer, dupliquer,
+  renommer et supprimer plusieurs jeux de commandes vocales (ex. un profil par vaisseau ou par style de jeu), avec un menu déroulant pour basculer instantanément de l'un à l'autre sans redémarrer l'appli.
+      -Changement de profil aussi possible sans ouvrir la fenêtre : un raccourci clavier configurable (Réglages) et le menu de l'icône barre des tâches permettent de basculer directement en jeu.
+      -Migration automatique et sans perte des commandes existantes vers un premier profil « Défaut » à la mise à jour.
+- Icône dans la barre des tâches (system tray) : fermer la fenêtre principale la masque désormais au lieu de quitter l'application — pratique pour la laisser tourner en fond pendant que tu joues. Menu clic droit : « Afficher NOVAVOX », changement rapide de profil de commandes, et « Quitter » pour fermer pour de bon.
+- Sauvegarde de la configuration : export/import de tes commandes et
+  réglages (IA, audio, overlay) dans une archive .zip, pratique pour
+  partager sa configuration ou en garder une copie de secours. Option
+  pour inclure tous les profils de commandes d'un coup.
+      -Sauvegarde automatique silencieuse en plus de l'export manuel : une copie complète (tous profils + réglages) est conservée localement une fois par jour, pour ne jamais tout perdre même sans y penser.
+- Téléchargements (modèle vocal, moteur Piper, installeur Ollama) plus fiables : nouvelle tentative automatique en cas de coupure réseau, et vérification que le fichier reçu est bien complet avant de l'utiliser.
+- Ollama :
+      -Timeout : échec rapide (2s) si Ollama n'est pas lancé, au lieu d'attendre 45-60s.
+      -Messages d'erreur : distinction claire entre "Ollama pas lancé" et "Ollama lancé mais génération trop lente".
+      -Redémarrage silencieux : n'est plus déclenché passivement à l'ouverture du panneau — seul le bouton "Revérifier" peut le faire, et c'est maintenant loggé.
+      -Correctif de sécurité : la désinstallation d'Ollama ne passe plus par l'interpréteur de commandes système (shell), qui n'était pas nécessaire et exposait inutilement à un risque d'injection.
+- Ecoute et récuperation des games.log
+      -ajout de l'intefasse, activation et entée du nom IG
+      -ajout d'interation vocale apres tracage de la route et arrivée sur fin de route.
+      -Récupération des informations visuelles affichées à l'écran (zone d'armistice, etc.) et annonce vocale de ces informations.
+      -Watcher Game.log : notifications HUD multi-lignes, correction d'encodage, résolution intelligente des destinations (stations orbitales, alias, dédoublonnage des clics répétés)
+- Joystick :
+      -Le bouton assigné pour la touche bascule/push-to-talk fonctionne maintenant correctement après un redémarrage de l'application.
+      -Étiquette simplifiée (n'affiche plus que « Bouton XX » au lieu du nom complet de la manette).
+- Fenêtre de l'application :
+      -Taille et position désormais mémorisées et restaurées automatiquement à chaque lancement.
+      -Écran de chargement au démarrage revu : reste dans la même fenêtre que l'application (fini les décalages de taille/position au lancement).
+      -Les fenêtres Réglages, Assistant IA, clavier virtuel et configuration du modèle s'ouvrent désormais centrées, à 80 % de la taille de la fenêtre principale.
+- Notes de mise à jour :
+      -Ajoutées, consultables en cliquant sur le numéro de version en bas de l'application.
+      -Mise en page corrigée pour les sous-listes imbriquées (indentation correctement affichée).
+-Bug critique : touches qui pouvaient rester bloquées enfoncées (_press_keys) — corrigé avec try/finally
+
+v0.1.0
+------
+- Première version de NOVAVOX.

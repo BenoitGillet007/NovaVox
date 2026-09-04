@@ -1,0 +1,470 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8" />
+<title>NovaVox Overlay</title>
+<style>
+  /* Fond entièrement transparent : seul le panneau ci-dessous a un
+     arrière-plan visible. Indispensable pour que le reste de l'écran
+     (le jeu, en dessous) reste visible tout autour.
+
+     height: 100% est OBLIGATOIRE ici sur html ET body : sans ça, le
+     height:100% de #panel ci-dessous ne veut rien dire (un pourcentage
+     de hauteur ne se résout que si TOUS les ancêtres jusqu'à la racine
+     ont eux-mêmes une hauteur explicite) — #panel se contractait alors
+     à la hauteur de son contenu réel, plus petite que la fenêtre,
+     laissant une zone "fantôme" en bas (hors de #panel) qui ne
+     déclenchait jamais le gestionnaire mousedown attaché à #panel. */
+  html, body {
+    margin: 0;
+    padding: 0;
+    height: 100%;
+    background: transparent;
+    overflow: hidden;
+    font-family: 'Segoe UI', Rajdhani, sans-serif;
+    user-select: none;
+    -webkit-user-select: none;
+  }
+
+  #panel {
+    position: relative; /* nécessaire pour positionner #panel::after (flash de commande) */
+    width: 100%;
+    height: 100%;
+    box-sizing: border-box;
+    background: rgba(10, 14, 20, 0.72);
+    border: 1px solid rgba(45, 212, 255, 0.35);
+    border-radius: 10px;
+    padding: 10px 12px;
+    color: #dbe4ee;
+    font-size: 12.5px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    box-shadow: 0 4px 18px rgba(0, 0, 0, 0.45);
+    transition: border-color 0.2s ease, box-shadow 0.2s ease, background-color 0.3s ease;
+  }
+
+  /* Micro coupé : fond rouge dédié, indépendant du flash de commande
+     ci-dessous (voir #panel::after) — ne modifie que la couleur de fond
+     du panneau, tout le reste (bordure édition, etc.) reste inchangé. */
+  #panel.mic-cut {
+    background: rgba(120, 20, 20, 0.72);
+  }
+
+  /* Flash de fond (2s) à chaque commande déclenchée : un calque séparé
+     (::after) plutôt qu'un changement direct de "background" sur #panel,
+     pour ne jamais entrer en conflit avec le fond rouge "micro coupé"
+     ci-dessus — le flash se superpose et s'estompe par-dessus, peu
+     importe la couleur de fond en dessous à ce moment-là. */
+  #panel::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    border-radius: 10px;
+    background: rgba(12, 94, 49, 0.55);
+    opacity: 0;
+    pointer-events: none;
+  }
+
+  #panel.cmd-flash::after {
+    animation: novavoxCmdFlash 2s ease-out;
+  }
+
+  @keyframes novavoxCmdFlash {
+    0%   { opacity: 0.85; }
+    100% { opacity: 0; }
+  }
+
+  /* Mode "déplacer" (édition) : bordure et légère lueur cyan plus
+     marquées, pour que ce soit visuellement évident que la fenêtre
+     peut être glissée à cet instant (contrairement au mode verrouillé/
+     clic-traversant, où elle est purement passive). */
+  #panel.edit-mode {
+    border-color: #2dd4ff;
+    box-shadow: 0 0 0 1px rgba(45, 212, 255, 0.5), 0 4px 20px rgba(45, 212, 255, 0.25);
+    cursor: move;
+  }
+
+  .row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    line-height: 1.3;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .icon {
+    flex-shrink: 0;
+    width: 16px;
+    text-align: center;
+  }
+
+  .label {
+    flex-shrink: 0;
+    color: #7c8a9c;
+  }
+
+  .value {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .value.ok { color: #4ade80; }
+  .value.warn { color: #facc15; }
+  .value.off { color: #7c8a9c; }
+  /* Micro coupé : rouge dédié plutôt que le gris neutre ".off" partagé
+     par les autres lignes (Écoute, IA, Zone...) — classe séparée pour ne
+     pas changer leur couleur par la même occasion. */
+  .value.mic-off { color: #f87171; }
+
+  #phraseRow .value {
+    color: #dbe4ee;
+    font-style: italic;
+  }
+
+  #lastCmdRow {
+    margin-top: 2px;
+    padding-top: 6px;
+    border-top: 1px solid rgba(255, 255, 255, 0.08);
+  }
+
+  #lastCmdRow .value {
+    color: #4ade80;
+    font-size: 11.5px;
+  }
+
+  #editBadge {
+    position: absolute;
+    top: 4px;
+    right: 8px;
+    font-size: 10px;
+    color: #2dd4ff;
+    display: none;
+  }
+  #panel.edit-mode #editBadge {
+    display: block;
+  }
+
+  /* Case à cocher de visibilité de chaque ligne : masquée en permanence
+     en mode verrouillé (l'utilisateur ne doit jamais les voir une fois
+     l'overlay figé), affichée uniquement en mode "déplacer" pour pouvoir
+     choisir quelles lignes rester visibles une fois reverrouillé. */
+  .row-toggle {
+    display: none;
+    flex-shrink: 0;
+    width: 11px;
+    height: 11px;
+    margin: 0;
+    accent-color: #2dd4ff;
+    cursor: pointer;
+  }
+  #panel.edit-mode .row-toggle {
+    display: inline-block;
+  }
+
+  /* Une ligne décochée reste néanmoins visible en mode "déplacer" (pour
+     pouvoir la recocher/décocher) : le masquage réel ne s'applique donc
+     qu'en dehors du mode édition, via ce sélecteur combiné. */
+  #panel:not(.edit-mode) .row.row-hidden {
+    display: none;
+  }
+</style>
+</head>
+<body>
+  <div id="panel">
+    <span id="editBadge">🔓 déplacer</span>
+
+    <div class="row" id="rowTime">
+      <input type="checkbox" class="row-toggle" id="toggle_time" checked onchange="onRowToggleChange('time', this.checked)">
+      <span class="icon">🕐</span>
+      <span class="value ok" id="timeValue">--:--:--</span>
+    </div>
+
+    <div class="row" id="rowListening">
+      <input type="checkbox" class="row-toggle" id="toggle_listening" checked onchange="onRowToggleChange('listening', this.checked)">
+      <span class="icon">🎧</span>
+      <span class="label">Écoute :</span>
+      <span class="value off" id="listeningValue">Arrêtée</span>
+    </div>
+
+    <div class="row" id="rowMic">
+      <input type="checkbox" class="row-toggle" id="toggle_mic" checked onchange="onRowToggleChange('mic', this.checked)">
+      <span class="icon">🎙</span>
+      <span class="label">Micro :</span>
+      <span class="value off" id="micValue">—</span>
+    </div>
+
+    <div class="row" id="rowAi">
+      <input type="checkbox" class="row-toggle" id="toggle_ai" checked onchange="onRowToggleChange('ai', this.checked)">
+      <span class="icon">🤖</span>
+      <span class="label">IA :</span>
+      <span class="value off" id="aiValue">—</span>
+    </div>
+
+    <div class="row" id="phraseRow">
+      <input type="checkbox" class="row-toggle" id="toggle_phrase" checked onchange="onRowToggleChange('phrase', this.checked)">
+      <span class="icon">💬</span>
+      <span class="value" id="phraseValue">…</span>
+    </div>
+
+    <div class="row" id="rowZone">
+      <input type="checkbox" class="row-toggle" id="toggle_zone" checked onchange="onRowToggleChange('zone', this.checked)">
+      <span class="icon">🧭</span>
+      <span class="label">Zone :</span>
+      <span class="value off" id="zoneValue">—</span>
+    </div>
+
+    <div class="row" id="lastCmdRow">
+      <input type="checkbox" class="row-toggle" id="toggle_lastCmd" checked onchange="onRowToggleChange('lastCmd', this.checked)">
+      <span class="icon">🎮</span>
+      <span class="value off" id="lastCmdValue">—</span>
+    </div>
+  </div>
+
+  <script>
+    // ------------------------------------------------------------------
+    // Horloge locale — mise à jour côté JS uniquement (heure système du
+    // PC), pas besoin de Python ici.
+    // ------------------------------------------------------------------
+    function updateOverlayClock() {
+      const el = document.getElementById("timeValue");
+      if (!el) return;
+      const now = new Date();
+      const hh = String(now.getHours()).padStart(2, "0");
+      const mm = String(now.getMinutes()).padStart(2, "0");
+      const ss = String(now.getSeconds()).padStart(2, "0");
+      el.textContent = `${hh}:${mm}:${ss}`;
+    }
+    updateOverlayClock();
+    setInterval(updateOverlayClock, 1000);
+
+    // ------------------------------------------------------------------
+    // Fonctions appelées depuis Python (Api._overlay_push, voir app.py)
+    // ------------------------------------------------------------------
+
+    function overlaySetMic(active) {
+      const el = document.getElementById("micValue");
+      el.textContent = active ? "Actif" : "Coupé";
+      el.className = "value " + (active ? "ok" : "mic-off");
+      const panel = document.getElementById("panel");
+      if (panel) panel.classList.toggle("mic-cut", !active);
+    }
+
+    // Fait clignoter le fond du panneau pendant 2 secondes — appelé par
+    // Python (Api._execute_command, via _overlay_flash_command) à chaque
+    // fois qu'une phrase liée à une commande est reconnue et déclenchée.
+    // Ne touche jamais à "background" directement (voir #panel::after
+    // dans le CSS) pour ne pas écraser/entrer en conflit avec le fond
+    // rouge "micro coupé" (.mic-cut) si les deux surviennent en même
+    // temps.
+    let overlayFlashTimer = null;
+    function overlayFlashCommand() {
+      const panel = document.getElementById("panel");
+      if (!panel) return;
+      panel.classList.remove("cmd-flash");
+      void panel.offsetWidth; // force un reflow pour pouvoir relancer l'animation si elle est déjà en cours
+      panel.classList.add("cmd-flash");
+      if (overlayFlashTimer) clearTimeout(overlayFlashTimer);
+      overlayFlashTimer = setTimeout(() => panel.classList.remove("cmd-flash"), 2000);
+    }
+
+    function overlaySetListening(active) {
+      const el = document.getElementById("listeningValue");
+      el.textContent = active ? "Active" : "Arrêtée";
+      el.className = "value " + (active ? "ok" : "off");
+    }
+
+    function overlaySetPhrase(text) {
+      document.getElementById("phraseValue").textContent = text || "…";
+    }
+
+    function overlaySetAi(text) {
+      const el = document.getElementById("aiValue");
+      el.textContent = text || "—";
+      const lower = (text || "").toLowerCase();
+      el.className = "value " + (lower.includes("prêt") ? "ok" : lower.includes("hors ligne") ? "off" : "warn");
+    }
+
+    function overlaySetZone(text) {
+      const el = document.getElementById("zoneValue");
+      el.textContent = text || "—";
+      el.className = "value " + (text ? "ok" : "off");
+    }
+
+    function overlaySetLastCommand(text) {
+      const el = document.getElementById("lastCmdValue");
+      el.textContent = text || "—";
+      el.className = "value " + (text ? "ok" : "off");
+    }
+
+    // Bascule l'indicateur visuel du mode "déplacer" (le clic-traversant
+    // réel est géré côté Windows par Python via SetWindowLong — ceci ne
+    // fait qu'afficher/masquer le repère visuel correspondant). Le
+    // masquage réel des lignes décochées (voir overlaySetRowVisibility)
+    // découle automatiquement du CSS ".row-hidden" combiné à ".edit-mode"
+    // — pas besoin de le regérer ici à chaque bascule.
+    function overlaySetEditMode(editable) {
+      document.getElementById("panel").classList.toggle("edit-mode", !!editable);
+    }
+
+    // ------------------------------------------------------------------
+    // Visibilité des lignes (cases à cocher, mode "déplacer" uniquement)
+    // ------------------------------------------------------------------
+
+    // Correspondance clé logique (voir OVERLAY_ROW_KEYS côté app.py) ->
+    // id de la div .row correspondante dans ce fichier.
+    const ROW_IDS = {
+      time: "rowTime",
+      listening: "rowListening",
+      mic: "rowMic",
+      ai: "rowAi",
+      phrase: "phraseRow",
+      zone: "rowZone",
+      lastCmd: "lastCmdRow",
+    };
+
+    // Appelé par Python (Api._push_overlay_full_state) à chaque (ré)
+    // ouverture de l'overlay, avec l'état complet des cases à cocher.
+    function overlaySetRowVisibility(map) {
+      if (!map) return;
+      for (const key in ROW_IDS) {
+        const visible = map[key] !== false;  // absent de map = visible par défaut
+        const rowEl = document.getElementById(ROW_IDS[key]);
+        const checkboxEl = document.getElementById("toggle_" + key);
+        if (rowEl) rowEl.classList.toggle("row-hidden", !visible);
+        if (checkboxEl) checkboxEl.checked = visible;
+      }
+      overlayRecalcHeight();
+    }
+
+    // Appelé au clic sur une case à cocher (voir onchange dans le HTML
+    // ci-dessus) : applique le changement immédiatement à l'écran (utile
+    // pour prévisualiser en re-verrouillant sans attendre un aller-retour
+    // réseau/IPC) puis le fait persister côté Python.
+    function onRowToggleChange(key, checked) {
+      const rowEl = document.getElementById(ROW_IDS[key]);
+      if (rowEl) rowEl.classList.toggle("row-hidden", !checked);
+      try {
+        window.pywebview.api.overlay_set_row_visible(key, checked);
+      } catch (err) {
+        reportOverlayError("Bascule de visibilité de la ligne « " + key + " »", err);
+      }
+      // Pas de recalcul de taille ici : en mode "déplacer" (seul mode où
+      // les cases sont visibles/cliquables), la fenêtre garde toujours sa
+      // taille par défaut pour que toutes les lignes restent accessibles
+      // — voir overlayRecalcHeight, qui ne fait rien tant que ce mode est
+      // actif. Le nouveau nombre de lignes ne prend effet sur la TAILLE
+      // qu'au moment où l'overlay est reverrouillé (voir
+      // overlaySetRowVisibility, appelé au rechargement de la fenêtre
+      // verrouillée par Api.overlay_set_edit_mode).
+    }
+
+    // Recalcule et applique la hauteur exacte nécessaire pour n'afficher
+    // que les lignes actuellement visibles (sans .row-hidden), en mode
+    // verrouillé uniquement — sans quoi une ligne décochée laisserait un
+    // espace vide (le fond translucide/opaque du panneau) en bas de
+    // l'overlay au lieu de disparaître avec la ligne elle-même. Mesure
+    // les tailles réellement RENDUES (getBoundingClientRect, padding/gap
+    // lus depuis le CSS calculé) plutôt que des valeurs recopiées en dur
+    // ici, pour ne jamais se désynchroniser si les styles changent.
+    function overlayRecalcHeight() {
+      const panel = document.getElementById("panel");
+      if (!panel) return;
+      if (panel.classList.contains("edit-mode")) {
+        // Mode "déplacer" : la fenêtre garde sa taille par défaut (toutes
+        // les lignes + leurs cases doivent rester visibles/cochables),
+        // aucun recalcul à faire ici.
+        return;
+      }
+      const rows = Array.from(panel.children).filter(
+        (el) => el.classList && el.classList.contains("row") && !el.classList.contains("row-hidden")
+      );
+      if (rows.length === 0) return;  // sécurité : jamais réduire à une fenêtre vide/inutilisable
+
+      const style = getComputedStyle(panel);
+      const paddingTop = parseFloat(style.paddingTop) || 0;
+      const paddingBottom = parseFloat(style.paddingBottom) || 0;
+      const gap = parseFloat(style.rowGap) || parseFloat(style.gap) || 0;
+
+      let total = paddingTop + paddingBottom + gap * (rows.length - 1);
+      rows.forEach((r) => { total += r.getBoundingClientRect().height; });
+
+      try {
+        window.pywebview.api.overlay_resize_to_content(Math.ceil(total));
+      } catch (err) {
+        reportOverlayError("Recalcul de la taille de l'overlay", err);
+      }
+    }
+
+    // ------------------------------------------------------------------
+    // Glisser natif Windows : un seul appel au clic (mousedown), Windows
+    // gère ensuite l'intégralité du déplacement lui-même jusqu'au
+    // relâchement du bouton — plus besoin de suivre la souris ni
+    // d'appeler window.move() nous-mêmes (voir overlay_start_native_drag
+    // côté app.py, et son commentaire pour l'historique des tentatives
+    // précédentes qui n'ont pas fonctionné).
+    // ------------------------------------------------------------------
+
+    function reportOverlayError(context, err) {
+        // Remonte l'erreur dans le journal système PRINCIPAL de NovaVox —
+        // sans ça, un échec ici disparaît sans laisser aucune trace nulle
+        // part, impossible à diagnostiquer. Se protège lui-même : si
+        // même CET appel échoue (ex. l'API n'existe vraiment pas du
+        // tout), on ne fait rien de plus, il n'y a rien d'autre à tenter.
+        const msg = `${context} : ${err && err.message ? err.message : err}`;
+        try {
+            if (window.pywebview && window.pywebview.api && window.pywebview.api.overlay_report_error) {
+                window.pywebview.api.overlay_report_error(msg);
+            }
+        } catch (e2) {
+            // rien de plus à faire
+        }
+    }
+
+    // Vérification précoce, dès le chargement de la page : si
+    // window.pywebview.api n'existe pas du tout quelques instants après
+    // le chargement, le glisser ne POURRA de toute façon jamais
+    // fonctionner — autant le savoir tout de suite plutôt que d'attendre
+    // le premier clic de l'utilisateur pour le découvrir.
+    setTimeout(() => {
+        if (!window.pywebview || !window.pywebview.api) {
+            reportOverlayError(
+                "Vérification au chargement",
+                "window.pywebview.api n'existe pas — le pont JS↔Python de l'overlay n'est pas disponible, le glisser ne peut pas fonctionner."
+            );
+        }
+    }, 1500);
+
+    // Attaché à document (toute la page), pas seulement à #panel : ça
+    // fonctionne même si #panel ne couvre pas exactement toute la
+    // fenêtre pour une raison ou une autre (voir le bug de height:100%
+    // corrigé ci-dessus, mais on garde cette robustesse au cas où).
+    document.addEventListener("mousedown", (e) => {
+      // Un clic sur une case à cocher de visibilité de ligne (voir
+      // ROW_IDS/onRowToggleChange ci-dessus) ne doit JAMAIS démarrer un
+      // glisser de fenêtre : sans cette exception, le preventDefault()
+      // plus bas empêchait la case de basculer normalement (le glisser
+      // natif Windows "avale" l'événement avant que la case ait pu réagir
+      // à son propre clic).
+      if (e.target && e.target.classList && e.target.classList.contains("row-toggle")) {
+        return;
+      }
+      // Ne démarre un glisser qu'en mode "déplacer" — en mode verrouillé,
+      // les clics ne devraient de toute façon jamais atteindre cette
+      // fenêtre (clic-traversant géré côté Windows), mais on se protège
+      // ici aussi au cas où.
+      const editModeActive = document.getElementById("panel").classList.contains("edit-mode");
+      if (!editModeActive) return;
+      e.preventDefault();
+      try {
+        window.pywebview.api.overlay_start_native_drag();
+      } catch (err) {
+        reportOverlayError("Échec du démarrage du glisser natif", err);
+      }
+    });
+  </script>
+</body>
+</html>

@@ -1,0 +1,11 @@
+vosk
+sounddevice
+numpy
+pydirectinput
+pywebview<5.3
+pythonnet==3.0.3
+keyboard
+mouse
+pygame
+pystray
+Pillow
