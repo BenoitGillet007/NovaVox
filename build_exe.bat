@@ -226,6 +226,24 @@ for /f "tokens=1 delims= " %%v in ('findstr /r "^v[0-9]" patch_maj.txt') do (
 set APPVER=%APPVER:v=%
 echo   -^> Version detectee : %APPVER%
 
+REM Notes de version : extrait uniquement le bloc de la version courante depuis patch_maj.txt, plutot que tout l'historique complet. Partage entre la publication GitHub et la notification Discord ci-dessous.
+set "NOTES_FILE=%TEMP%\novavox_release_notes.txt"
+if exist "%NOTES_FILE%" del /q "%NOTES_FILE%"
+set CAPTURING=0
+for /f "usebackq delims=" %%L in ("patch_maj.txt") do (
+    set "LINE=%%L"
+    echo(!LINE!| findstr /r "^v[0-9]" >nul
+    if not errorlevel 1 (
+        if "!CAPTURING!"=="1" (set CAPTURING=2) else (set CAPTURING=1)
+    ) else (
+        if "!CAPTURING!"=="1" (
+            echo(!LINE!| findstr /r "^------*$" >nul
+            if errorlevel 1 echo(!LINE!>>"%NOTES_FILE%"
+        )
+    )
+)
+if not exist "%NOTES_FILE%" echo Voir patch_maj.txt pour le detail.> "%NOTES_FILE%"
+
 echo.
 echo Compilation de l'installateur (Inno Setup)...
 if exist "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" (
@@ -241,6 +259,10 @@ if exist "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" (
 )
 scp -i "%USERPROFILE%\.ssh\***REMOVED***" "Output\NovaVox_Setup.exe" ***REMOVED***@***REMOVED***:
 scp -i "%USERPROFILE%\.ssh\***REMOVED***" "version.json" ***REMOVED***@***REMOVED***:
+
+echo.
+echo Notification Discord...
+powershell -NoProfile -ExecutionPolicy Bypass -File "notify_discord.ps1" -Version "%APPVER%" -NotesFile "%NOTES_FILE%"
 
 echo.
 REM ============================================================
@@ -270,24 +292,6 @@ if not exist "Output\NovaVox_Setup.exe" goto :gh_no_exe
 
 set GH_REPO=BenoitGillet007/NovaVox
 set GH_TAG=v%APPVER%
-
-REM Notes de version : extrait uniquement le bloc de la version courante depuis patch_maj.txt, plutot que tout l'historique complet.
-set "NOTES_FILE=%TEMP%\novavox_release_notes.txt"
-if exist "%NOTES_FILE%" del /q "%NOTES_FILE%"
-set CAPTURING=0
-for /f "usebackq delims=" %%L in ("patch_maj.txt") do (
-    set "LINE=%%L"
-    echo(!LINE!| findstr /r "^v[0-9]" >nul
-    if not errorlevel 1 (
-        if "!CAPTURING!"=="1" (set CAPTURING=2) else (set CAPTURING=1)
-    ) else (
-        if "!CAPTURING!"=="1" (
-            echo(!LINE!| findstr /r "^------*$" >nul
-            if errorlevel 1 echo(!LINE!>>"%NOTES_FILE%"
-        )
-    )
-)
-if not exist "%NOTES_FILE%" echo Voir patch_maj.txt pour le detail.> "%NOTES_FILE%"
 
 gh release view %GH_TAG% --repo %GH_REPO% >nul 2>&1
 if errorlevel 1 goto :gh_create

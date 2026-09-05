@@ -36,6 +36,9 @@ profiles_config.json
 # commands.json
 # ai_config.json
 
+# URL de webhook Discord (secrète, jamais versionnée)
+discord_webhook.txt
+
 # Divers éditeurs / OS
 .vscode/
 .idea/

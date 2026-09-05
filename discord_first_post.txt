@@ -1,0 +1,43 @@
+🎙 **Bienvenue dans #maj-novavox !**
+
+Ce salon annonce automatiquement chaque nouvelle version de **NovaVox**, l'assistant vocal pour Star Citizen. Voici un récap de tout ce qui a été ajouté jusqu'ici (v0.1.0 → v0.1.7) :
+
+**🗣 Reconnaissance vocale & commandes**
+• Commandes vocales 100% locales et gratuites, compréhension large des phrases (pas besoin de dire mot pour mot)
+• N'importe quelle touche, combinaison, clic souris ou maintien de 2s
+• Réordonnement des commandes à la souris, organisation en groupes
+• Correction : la phrase la plus longue/précise est toujours priorisée en cas d'ambiguïté
+• Plusieurs profils de commandes (combat, minage, exploration...), bascule instantanée via raccourci clavier/manette
+
+**🤖 Assistant IA (Nova)**
+• IA locale et gratuite (Ollama), personnalisable (nom, prénom, longueur des réponses, contexte libre)
+• Voix naturelle (Piper), plusieurs voix FR, réglables en vitesse/expressivité, effet "radio de vaisseau"
+• Timeout rapide si Ollama n'est pas lancé, messages d'erreur clairs
+
+**🖥 Overlay en jeu**
+• Fenêtre superposée à Star Citizen (heure, micro, phrase reconnue, statut IA, zone, dernière commande)
+• Aucune injection dans le jeu, zéro risque anti-triche
+• Déplaçable, position mémorisée, clignote au vert sur commande exécutée, fond rouge si micro coupé
+• Choix des lignes affichées/masquées
+
+**🛰 Game.log (zones & HUD)**
+• Annonce vocale automatique des changements de zone, arrivée/départ en saut quantique
+• Phrases personnalisables pour chaque type d'événement
+• Corrections de lecture pour les notifications HUD, détection et ajout automatiques des nouvelles notifications
+• Indicateurs visuels (🔴 non enregistré, 🟠 nouvelle correction à personnaliser)
+
+**🔊 Audio**
+• Lecture voix entièrement revue : périphérique de sortie et volume dédiés, indépendants du volume système
+• Annulation d'écho expérimentale (réduit le risque que Nova s'entende elle-même)
+• Réglages micro : amplification interne, seuil de sensibilité
+
+**⚙️ Confort & fiabilité**
+• Mises à jour automatiques avec bannière de téléchargement
+• Lancement automatique de NovaVox au démarrage de Star Citizen
+• Icône dans la barre des tâches (fermer = masquer, pas quitter)
+• Export/import de la config en .zip + sauvegarde automatique quotidienne
+• Téléchargements plus fiables (nouvelle tentative auto en cas de coupure)
+• Réglages réorganisés en onglets clairs : 🔊 Sons, 🤖 IA, 🛰 Game.log, ⬡ NovaVox
+• Bug critique corrigé : touches qui pouvaient rester bloquées enfoncées
+
+Merci à tous ceux qui testent, remontent des bugs et proposent des idées ❤️
