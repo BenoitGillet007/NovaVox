@@ -373,7 +373,7 @@ PATCH_NOTES_FILE = os.path.join(BASE_DIR, "patch_maj.txt")
 UPDATE_MANIFEST_URL = "https://***REMOVED***.1ercorpscolonial.fr/version.json"
 # Repli utilisé uniquement si patch_maj.txt est absent ou ne contient
 # aucune ligne "vX.Y.Z" reconnaissable (voir get_app_version ci-dessous).
-APP_VERSION_FALLBACK = "0.1.7"
+APP_VERSION_FALLBACK = "0.1.8"
 MODEL_DIR_DEFAULT = os.path.join(BASE_DIR, "model")
 GUI_INDEX = os.path.join(RESOURCE_DIR, "gui", "index.html")
 # Fenêtre séparée, superposée à Star Citizen — PAS une injection dans le
@@ -5377,6 +5377,15 @@ class Api:
             self._destroy_overlay_window()
         return self.overlay_get_state()
 
+    def get_autolaunch_with_sc_enabled(self):
+        """État actuel de la case « lancer NovaVox au démarrage de Star
+        Citizen » (Réglages > NovaVox)."""
+        return is_star_citizen_autolaunch_enabled()
+
+    def set_autolaunch_with_sc_enabled(self, enabled):
+        """Active/désactive la veille de démarrage automatique."""
+        return set_star_citizen_autolaunch_enabled(bool(enabled))
+
     def overlay_set_edit_mode(self, editable):
         """Bascule entre mode "déplacer" (fenêtre normale opaque,
         glissable à la souris) et mode "verrouillé" (fenêtre transparente,
@@ -6194,6 +6203,96 @@ def _ps_escape(value):
     return (value or "").replace("'", "''")
 
 
+def _star_citizen_autolaunch_shortcut_path():
+    """Chemin du raccourci de veille placé dans le dossier Démarrage de
+    Windows (lancé automatiquement à chaque connexion)."""
+    startup_dir = os.path.join(
+        os.environ.get("APPDATA", ""),
+        "Microsoft", "Windows", "Start Menu", "Programs", "Startup",
+    )
+    return os.path.join(startup_dir, "NOVAVOX (veille Star Citizen).lnk")
+
+
+def is_star_citizen_autolaunch_enabled():
+    """Vrai si le raccourci de veille est présent dans le dossier
+    Démarrage de Windows (case cochée dans Réglages > NovaVox)."""
+    if sys.platform != "win32":
+        return False
+    return os.path.isfile(_star_citizen_autolaunch_shortcut_path())
+
+
+def set_star_citizen_autolaunch_enabled(enabled):
+    """Crée ou supprime le raccourci de veille dans le dossier Démarrage
+    de Windows. Ce raccourci relance l'exécutable avec l'argument
+    --wait-for-sc (voir _wait_for_star_citizen_if_requested), qui reste
+    en veille silencieuse jusqu'à détecter StarCitizen.exe puis démarre
+    l'appli normalement. Reste silencieux en cas d'échec, comme
+    ensure_desktop_shortcut : ce réglage ne doit jamais empêcher l'appli
+    de fonctionner normalement."""
+    if sys.platform != "win32":
+        return False
+    shortcut_path = _star_citizen_autolaunch_shortcut_path()
+    try:
+        if not enabled:
+            if os.path.isfile(shortcut_path):
+                os.remove(shortcut_path)
+            return True
+
+        if not getattr(sys, "frozen", False):
+            # En développement (python app.py), pas d'exécutable autonome
+            # à relancer automatiquement : réglage disponible seulement
+            # depuis la version compilée (.exe).
+            return False
+
+        target = _ps_escape(sys.executable)
+        workdir = _ps_escape(BASE_DIR)
+        path_ps = _ps_escape(shortcut_path)
+        script = (
+            "$shell = New-Object -ComObject WScript.Shell; "
+            f"$sc = $shell.CreateShortcut('{path_ps}'); "
+            f"$sc.TargetPath = '{target}'; "
+            "$sc.Arguments = '--wait-for-sc'; "
+            f"$sc.WorkingDirectory = '{workdir}'; "
+            "$sc.IconLocation = $sc.TargetPath + ',0'; "
+            "$sc.Save()"
+        )
+        encoded_cmd = base64.b64encode(script.encode("utf-16-le")).decode("ascii")
+        creationflags = subprocess.CREATE_NO_WINDOW if hasattr(subprocess, "CREATE_NO_WINDOW") else 0
+        subprocess.run(
+            ["powershell", "-NoProfile", "-NonInteractive", "-EncodedCommand", encoded_cmd],
+            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+            creationflags=creationflags, timeout=10,
+        )
+        return os.path.isfile(shortcut_path)
+    except Exception:
+        return False
+
+
+def _wait_for_star_citizen_if_requested():
+    """Si l'appli a été lancée avec --wait-for-sc (raccourci de veille
+    créé par set_star_citizen_autolaunch_enabled), reste en veille
+    silencieuse, sans aucune fenêtre, jusqu'à ce que StarCitizen.exe soit
+    détecté, puis laisse main() démarrer normalement. Vérifie toutes les
+    5 secondes ; empreinte CPU/mémoire quasi nulle en attendant."""
+    if "--wait-for-sc" not in sys.argv:
+        return
+    if sys.platform != "win32":
+        return
+    creationflags = subprocess.CREATE_NO_WINDOW if hasattr(subprocess, "CREATE_NO_WINDOW") else 0
+    while True:
+        try:
+            result = subprocess.run(
+                ["tasklist", "/FI", "IMAGENAME eq StarCitizen.exe"],
+                capture_output=True, text=True, timeout=10,
+                creationflags=creationflags,
+            )
+            if "StarCitizen.exe" in result.stdout:
+                return
+        except Exception:
+            pass
+        time.sleep(5)
+
+
 def ensure_desktop_shortcut():
     """Crée automatiquement un raccourci sur le Bureau au premier
     lancement de l'exécutable compilé, pour que l'utilisateur ait une
@@ -6780,6 +6879,8 @@ def _main_legacy_path(window_config):
 
 
 def main():
+    _wait_for_star_citizen_if_requested()
+
     # En arrière-plan pour ne pas retarder le démarrage.
     threading.Thread(target=ensure_desktop_shortcut, daemon=True).start()
 

@@ -182,6 +182,7 @@ function bindEvents() {
   document.getElementById("profileCycleHotkeyBtn").addEventListener("click", onOpenProfileCycleHotkey);
   document.getElementById("profileCycleHotkeyClearBtn").addEventListener("click", onClearProfileCycleHotkey);
   document.getElementById("overlayEnabledToggle").addEventListener("change", onOverlayEnabledToggle);
+  document.getElementById("autoLaunchWithScToggle").addEventListener("change", onAutoLaunchWithScToggle);
   document.getElementById("overlayEditModeBtn").addEventListener("click", onOverlayEditModeClick);
   document.getElementById("modelSetupBrowseBtn").addEventListener("click", async () => {
     const path = await window.pywebview.api.browse_model();
@@ -730,6 +731,7 @@ function openSettings() {
     window.pywebview.api.start_mic_monitor();
   }
   refreshOverlayUI();
+  refreshAutoLaunchUI();
 }
 
 function closeSettings() {
@@ -762,6 +764,31 @@ async function refreshOverlayUI() {
   } catch (e) {
     // état overlay indisponible (ex. dépendances pas encore prêtes) : ignore
   }
+}
+
+async function refreshAutoLaunchUI() {
+  try {
+    const enabled = await window.pywebview.api.get_autolaunch_with_sc_enabled();
+    document.getElementById("autoLaunchWithScToggle").checked = !!enabled;
+  } catch (e) {
+    // indisponible (ex. hors Windows) : ignore
+  }
+}
+
+async function onAutoLaunchWithScToggle(e) {
+  const desired = e.target.checked;
+  const ok = await window.pywebview.api.set_autolaunch_with_sc_enabled(desired);
+  if (desired && !ok) {
+    e.target.checked = false;
+    appendLog("Ce réglage n'est disponible que depuis la version installée (.exe), pas en développement.", "warn");
+    return;
+  }
+  appendLog(
+    desired
+      ? "NovaVox se lancera automatiquement au démarrage de Star Citizen."
+      : "Lancement automatique désactivé.",
+    "info"
+  );
 }
 
 function setOverlayEditButtonState(editable) {

@@ -13,13 +13,11 @@
   --danger-dim: rgba(255, 77, 94, 0.16);
   --success: #35e0a1;
   --success-dim: rgba(53, 224, 161, 0.14);
-
   --font-display: 'Rajdhani', 'Segoe UI', sans-serif;
   --font-mono: 'IBM Plex Mono', 'Consolas', monospace;
   --radius: 10px;
   --notch: 10px;
 }
-
 html[data-theme="light"] {
   --bg: #eef1f5;
   --panel: #ffffff;
@@ -36,9 +34,7 @@ html[data-theme="light"] {
   --success: #047857;
   --success-dim: rgba(4, 120, 87, 0.10);
 }
-
 * { box-sizing: border-box; }
-
 body {
   margin: 0;
   background: var(--bg);
@@ -47,7 +43,6 @@ body {
   font-size: 15px;
   transition: background 0.25s ease, color 0.25s ease;
 }
-
 .app {
   max-width: 1180px;
   margin: 0 auto;
@@ -56,7 +51,6 @@ body {
   flex-direction: column;
   gap: 18px;
 }
-
 /* ---------- Composant "panneau" avec coins coupés (motif console) ---------- */
 .panel {
   background: var(--panel);
@@ -83,7 +77,6 @@ body {
   bottom: -1px; right: -1px;
   border-left: none; border-top: none;
 }
-
 /* ---------- En-tête ---------- */
 .topbar {
   display: flex;
@@ -111,13 +104,11 @@ body {
   font-family: var(--font-mono);
   letter-spacing: 0.02em;
 }
-
 .topbar-actions {
   display: flex;
   align-items: center;
   gap: 10px;
 }
-
 .version-badge {
   font-family: var(--font-mono);
   font-size: 11px;
@@ -129,7 +120,6 @@ body {
   padding: 3px 10px;
   letter-spacing: 0.02em;
 }
-
 .app-footer {
   display: flex;
   align-items: center;
@@ -154,7 +144,6 @@ body {
 }
 .app-footer strong { color: var(--accent); font-weight: 600; }
 .footer-dot { opacity: 0.5; }
-
 .icon-btn {
   background: var(--panel-alt);
   border: 1px solid var(--border);
@@ -169,12 +158,10 @@ body {
   transition: border-color 0.15s ease, transform 0.15s ease;
 }
 .icon-btn:hover { border-color: var(--accent); transform: translateY(-1px); }
-
 /* ---------- Panneau de contrôle ---------- */
 .control-panel { display: flex; flex-direction: column; gap: 16px; }
 #settingsModal .control-row { margin-bottom: 18px; }
 #settingsModal .control-row:last-child { margin-bottom: 0; }
-
 /* ---------- Onglets des Réglages (Sons / Divers) ---------- */
 .settings-tabs {
   display: flex;
@@ -208,7 +195,6 @@ body {
   margin-right: 1px;
 }
 .settings-tab-panel.hidden { display: none; }
-
 .control-row { display: flex; flex-direction: column; gap: 6px; }
 .control-row label {
   font-size: 11px;
@@ -245,7 +231,6 @@ body {
   border-color: var(--accent);
   box-shadow: 0 0 0 3px var(--accent-dim);
 }
-
 .mic-gain-value {
   font-family: var(--font-mono);
   color: var(--accent);
@@ -254,44 +239,12 @@ body {
   letter-spacing: normal;
   margin-left: 6px;
 }
-input[type="range"]#micGainRange {
-  -webkit-appearance: none;
-  appearance: none;
-  width: 100%;
-  height: 6px;
-  border-radius: 20px;
-  background: var(--panel-alt);
-  border: 1px solid var(--border);
-  outline: none;
-  margin: 4px 0;
-}
-input[type="range"]#micGainRange::-webkit-slider-thumb {
-  -webkit-appearance: none;
-  appearance: none;
-  width: 18px;
-  height: 18px;
-  border-radius: 50%;
-  background: var(--accent);
-  cursor: pointer;
-  border: 2px solid var(--panel);
-  box-shadow: 0 0 6px var(--accent-dim);
-}
-input[type="range"]#micGainRange::-moz-range-thumb {
-  width: 18px;
-  height: 18px;
-  border-radius: 50%;
-  background: var(--accent);
-  cursor: pointer;
-  border: 2px solid var(--panel);
-  box-shadow: 0 0 6px var(--accent-dim);
-}
 .mic-gain-hint {
   margin: 4px 0 0;
   font-size: 11px;
   color: var(--muted);
   line-height: 1.4;
 }
-
 .aec-toggle-label {
   display: flex !important;
   flex-direction: row !important;
@@ -316,7 +269,6 @@ input[type="range"]#micGainRange::-moz-range-thumb {
 .aec-toggle-label.aec-unavailable input[type="checkbox"] {
   cursor: not-allowed;
 }
-
 .mic-level-meter {
   position: relative;
   height: 14px;
@@ -342,7 +294,6 @@ input[type="range"]#micGainRange::-moz-range-thumb {
   box-shadow: 0 0 4px var(--danger);
   transition: left 0.1s ease;
 }
-
 /* ---------- Mode d'activation vocale ---------- */
 .listen-mode-options {
   display: flex;
@@ -390,7 +341,6 @@ input[type="range"]#micGainRange::-moz-range-thumb {
   flex-wrap: wrap;
 }
 .listen-hotkey-row.disabled { opacity: 0.45; pointer-events: none; }
-
 .engage-row {
   flex-direction: row;
   align-items: center;
@@ -399,7 +349,6 @@ input[type="range"]#micGainRange::-moz-range-thumb {
   flex-wrap: wrap;
 }
 .status-block { display: flex; align-items: center; gap: 14px; }
-
 /* ---------- Indicateur radar (élément signature) ---------- */
 .status-core {
   position: relative;
@@ -421,7 +370,6 @@ input[type="range"]#micGainRange::-moz-range-thumb {
   background: var(--muted);
   transition: background 0.25s ease;
 }
-
 .status-core.listening .core-ring {
   border-top-color: var(--accent);
   border-right-color: var(--accent);
@@ -440,17 +388,14 @@ input[type="range"]#micGainRange::-moz-range-thumb {
 .status-core.loading .core-dot { background: var(--amber); }
 .status-core.error .core-ring { border-color: var(--danger); }
 .status-core.error .core-dot { background: var(--danger); }
-
 @keyframes spin { to { transform: rotate(360deg); } }
 @keyframes pulse {
   0%, 100% { opacity: 0.55; transform: scale(1); }
   50% { opacity: 1; transform: scale(1.12); }
 }
-
 .status-text { display: flex; flex-direction: column; }
 .status-label { font-weight: 700; font-size: 15px; letter-spacing: 0.02em; }
 .status-sub { font-size: 12px; color: var(--muted); font-family: var(--font-mono); }
-
 .mic-gate-badge {
   display: flex;
   align-items: center;
@@ -479,7 +424,6 @@ input[type="range"]#micGainRange::-moz-range-thumb {
   0%, 100% { opacity: 1; }
   50% { opacity: 0.6; }
 }
-
 /* ---------- Boutons (coins coupés = "élément actionnable") ---------- */
 .btn {
   font-family: var(--font-display);
@@ -494,7 +438,6 @@ input[type="range"]#micGainRange::-moz-range-thumb {
 }
 .btn:active { transform: scale(0.98); }
 .btn:hover { filter: brightness(1.12); }
-
 .btn-engage {
   background: var(--accent);
   color: #04161c;
@@ -509,7 +452,6 @@ input[type="range"]#micGainRange::-moz-range-thumb {
 }
 .btn-sm { padding: 6px 14px; font-size: 12px; }
 .btn:disabled { opacity: 0.5; cursor: not-allowed; filter: none; }
-
 /* ---------- Grille principale ---------- */
 .main-grid {
   display: grid;
@@ -520,7 +462,6 @@ input[type="range"]#micGainRange::-moz-range-thumb {
 @media (max-width: 860px) {
   .main-grid { grid-template-columns: 1fr; }
 }
-
 .panel-header {
   display: flex;
   align-items: center;
@@ -547,7 +488,6 @@ input[type="range"]#micGainRange::-moz-range-thumb {
   padding: 2px 9px;
   border-radius: 20px;
 }
-
 /* ---------- Barre de sélection de profil ---------- */
 .profile-bar {
   display: flex;
@@ -581,7 +521,6 @@ input[type="range"]#micGainRange::-moz-range-thumb {
 .profile-bar .btn {
   padding: 4px 8px;
 }
-
 /* ---------- Cartes de commandes ---------- */
 .commands-list {
   display: flex;
@@ -636,7 +575,6 @@ input[type="range"]#micGainRange::-moz-range-thumb {
   cursor: default;
   pointer-events: none;
 }
-
 /* ---------- Réordonner (clic pour prendre, clic pour déposer) ---------- */
 .drag-handle {
   flex-shrink: 0;
@@ -648,7 +586,6 @@ input[type="range"]#micGainRange::-moz-range-thumb {
   user-select: none;
 }
 .drag-handle:hover { color: var(--accent); }
-
 /* Pendant qu'un élément est "en main" (voir attachCommandReorder côté
    script.js), le curseur au survol du reste de la liste indique qu'un
    clic va y déposer l'élément — classe posée/retirée sur #commandsList
@@ -658,7 +595,6 @@ input[type="range"]#micGainRange::-moz-range-thumb {
 .commands-list.picking .command-title-card:not(.dragging) {
   cursor: pointer;
 }
-
 /* Carte actuellement "en main" : contour et lueur, plutôt qu'un simple
    fondu — contrairement à un vrai glisser, la carte reste immobile et
    peut le rester un moment (le temps de choisir où cliquer), un fondu
@@ -668,7 +604,6 @@ input[type="range"]#micGainRange::-moz-range-thumb {
   border-color: var(--accent);
   box-shadow: 0 0 0 1px var(--accent), 0 0 14px var(--accent-dim);
 }
-
 /* Ligne d'insertion affichée sur la carte survolée pendant qu'un élément
    est en main, au-dessus ou en dessous selon la moitié pointée par le
    curseur — repère visuel clair de l'endroit exact où il sera déposé au
@@ -681,7 +616,6 @@ input[type="range"]#micGainRange::-moz-range-thumb {
 .command-title-card.drag-over-bottom {
   box-shadow: inset 0 -2px 0 0 var(--accent);
 }
-
 /* ---------- Titres de groupe ---------- */
 .command-title-card {
   display: flex;
@@ -708,7 +642,6 @@ input[type="range"]#micGainRange::-moz-range-thumb {
   letter-spacing: 0.08em;
   color: var(--accent);
 }
-
 .toggle-syn {
   display: flex;
   align-items: center;
@@ -722,7 +655,6 @@ input[type="range"]#micGainRange::-moz-range-thumb {
   transition: transform 0.2s ease;
   font-size: 10px;
 }
-
 .icon-btn-sm {
   background: transparent;
   border: 1px solid var(--border);
@@ -738,7 +670,6 @@ input[type="range"]#micGainRange::-moz-range-thumb {
 .icon-btn-sm.danger:hover { border-color: var(--danger); color: var(--danger); }
 .icon-btn-sm.accent { border-color: var(--accent); color: var(--accent); }
 .icon-btn-sm.accent:hover { background: var(--accent); color: var(--panel); }
-
 .command-card.editing {
   border-color: var(--accent);
   box-shadow: 0 0 0 1px var(--accent-dim);
@@ -763,7 +694,6 @@ input[type="range"]#micGainRange::-moz-range-thumb {
 }
 .keycap-edit:hover { background: var(--accent-dim); }
 .syn-actions { display: flex; gap: 4px; }
-
 .synonyms-list {
   list-style: none;
   margin: 8px 0 0;
@@ -793,7 +723,6 @@ input[type="range"]#micGainRange::-moz-range-thumb {
   color: var(--muted);
   padding-left: 4px;
 }
-
 /* ---------- Formulaire d'ajout ---------- */
 .add-form {
   display: flex;
@@ -823,7 +752,6 @@ input[type="range"]#micGainRange::-moz-range-thumb {
   background: var(--panel);
 }
 .key-field input::placeholder { color: var(--muted); }
-
 /* ---------- Modale (fond) ---------- */
 .modal-overlay {
   position: fixed;
@@ -837,7 +765,6 @@ input[type="range"]#micGainRange::-moz-range-thumb {
 }
 .modal-overlay.hidden { display: none; }
 .hidden { display: none !important; }
-
 .modal-panel {
   /* Taille uniforme pour toutes les fenêtres modales (Réglages, clavier
      virtuel, configuration du modèle, Assistant IA) : 80% de la largeur/
@@ -869,7 +796,6 @@ input[type="range"]#micGainRange::-moz-range-thumb {
   letter-spacing: 0.06em;
   color: var(--text);
 }
-
 .kb-selected {
   display: flex;
   align-items: center;
@@ -904,7 +830,6 @@ input[type="range"]#micGainRange::-moz-range-thumb {
   0%, 100% { box-shadow: 0 0 0 0 var(--danger); }
   50% { box-shadow: 0 0 0 4px transparent; }
 }
-
 /* ---------- Sélecteur de disposition clavier ---------- */
 .kb-layout-switch {
   display: flex;
@@ -956,7 +881,6 @@ input[type="range"]#micGainRange::-moz-range-thumb {
   width: fit-content;
 }
 .kb-hold-toggle input { accent-color: var(--accent); cursor: pointer; }
-
 /* ---------- Clavier virtuel ---------- */
 .virtual-keyboard {
   display: flex;
@@ -1037,7 +961,6 @@ input[type="range"]#micGainRange::-moz-range-thumb {
   border-color: transparent;
   background: transparent;
 }
-
 .kb-key.modifier.active {
   background: var(--accent-dim);
   border-color: var(--accent);
@@ -1048,7 +971,6 @@ input[type="range"]#micGainRange::-moz-range-thumb {
   border-color: var(--accent);
   color: #04161c;
 }
-
 .modal-footer {
   display: flex;
   align-items: center;
@@ -1058,7 +980,6 @@ input[type="range"]#micGainRange::-moz-range-thumb {
   border-top: 1px solid var(--border);
 }
 .modal-footer-right { display: flex; gap: 8px; }
-
 /* ---------- Journal / console ---------- */
 .log-console {
   height: 420px;
@@ -1081,7 +1002,6 @@ input[type="range"]#micGainRange::-moz-range-thumb {
 .log-info .log-msg { color: var(--text); }
 .log-success .log-msg { color: var(--success); font-weight: 600; }
 .log-error .log-msg { color: var(--danger); font-weight: 600; }
-
 /* ---------- Scrollbars ---------- */
 .commands-list::-webkit-scrollbar,
 .log-console::-webkit-scrollbar { width: 8px; }
@@ -1090,7 +1010,6 @@ input[type="range"]#micGainRange::-moz-range-thumb {
   background: var(--border);
   border-radius: 4px;
 }
-
 /* ---------- Configuration du modèle vocal (premier lancement) ---------- */
 .model-setup-intro {
   font-size: 13px;
@@ -1167,13 +1086,11 @@ input[type="range"]#micGainRange::-moz-range-thumb {
   font-size: 12.5px;
   line-height: 1.5;
 }
-
 /* ---------- Assistant IA ---------- */
 .ai-panel {
   display: flex;
   flex-direction: column;
 }
-
 .ai-badge {
   font-family: var(--font-mono);
   font-size: 10px;
@@ -1190,7 +1107,6 @@ input[type="range"]#micGainRange::-moz-range-thumb {
 .ai-badge.ready { background: var(--success-dim); color: var(--success); }
 .ai-badge.offline { background: var(--danger-dim); color: var(--danger); }
 .ai-badge.checking { background: var(--amber-dim); color: var(--amber); }
-
 .ai-setup {
   background: var(--panel-alt);
   border: 1px solid var(--border);
@@ -1215,7 +1131,6 @@ input[type="range"]#micGainRange::-moz-range-thumb {
   white-space: pre-wrap;
 }
 .ai-pull-log.hidden { display: none; }
-
 .ai-chat {
   height: 380px;
   overflow-y: auto;
@@ -1252,7 +1167,6 @@ input[type="range"]#micGainRange::-moz-range-thumb {
   color: var(--muted);
   font-style: italic;
 }
-
 .ai-wake-hint {
   display: flex;
   align-items: center;
@@ -1281,7 +1195,6 @@ input[type="range"]#micGainRange::-moz-range-thumb {
   box-shadow: 0 0 8px var(--accent-dim);
   animation: pulse 1.2s ease-in-out infinite;
 }
-
 /* ---------- Réglages avancés (repliables) ---------- */
 .ai-advanced-settings {
   border: 1px solid var(--border);
@@ -1324,7 +1237,6 @@ input[type="range"]#micGainRange::-moz-range-thumb {
   padding: 12px 14px;
   width: auto;
 }
-
 /* ---------- Moteur vocal (Windows / Piper) ---------- */
 .ai-voice-engine-section {
   margin: 0 14px 14px;
@@ -1397,14 +1309,12 @@ input[type="range"]#micGainRange::-moz-range-thumb {
   color: var(--muted);
   font-family: var(--font-mono);
 }
-
 .ai-settings-row {
   display: flex;
   gap: 14px;
   flex-wrap: wrap;
   margin-bottom: 14px;
 }
-
 .ai-context-section {
   background: var(--panel-alt);
   border: 1px solid var(--border);
@@ -1558,7 +1468,6 @@ input[type="range"]#micGainRange::-moz-range-thumb {
 .game-log-override-add input {
   flex: 1 1 220px;
 }
-
 /* ---- Indicateurs d'état : rouge = non enregistré, orange = nouvelle
    entrée jamais personnalisée (voir updateGameLogRowStatus côté
    script.js) ---- */
@@ -1590,7 +1499,6 @@ input[type="range"]#micGainRange::-moz-range-thumb {
   border-color: var(--danger);
   background: var(--danger-dim);
 }
-
 .btn-ghost.danger {
   color: var(--danger);
   border-color: var(--border);
@@ -1624,7 +1532,6 @@ input[type="range"]#micGainRange::-moz-range-thumb {
   width: 100%;
   justify-content: center;
 }
-
 .ai-voice-toggle {
   display: flex;
   align-items: center;
@@ -1720,7 +1627,6 @@ input[type="range"]#micGainRange::-moz-range-thumb {
   background: #2dd4ff;
   transition: width 0.25s ease;
 }
-
 /* ---------------------------------------------------------- Notes de MAJ */
 .patch-notes-content {
   display: flex;
@@ -1730,7 +1636,6 @@ input[type="range"]#micGainRange::-moz-range-thumb {
   overflow-y: auto;
   padding: 4px 4px 4px 0;
 }
-
 .patch-note-version {
   padding: 14px 18px;
   background: var(--panel-alt);
@@ -1752,7 +1657,6 @@ input[type="range"]#micGainRange::-moz-range-thumb {
   opacity: 0.92;
   transition: opacity 0.15s ease;
 }
-
 .patch-note-header {
   display: flex;
   align-items: baseline;
@@ -1778,7 +1682,6 @@ input[type="range"]#micGainRange::-moz-range-thumb {
   padding: 2px 8px;
   border-radius: 999px;
 }
-
 .patch-note-list {
   margin: 0;
   padding-left: 20px;
@@ -1810,12 +1713,10 @@ input[type="range"]#micGainRange::-moz-range-thumb {
 .patch-note-version.is-old .patch-note-list li::before {
   background: var(--muted);
 }
-
 #patchNotesPanel {
   display: flex;
   flex-direction: column;
 }
-
 .kb-repeat-row {
   margin: 0 0 14px;
 }

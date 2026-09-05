@@ -1,5 +1,8 @@
 NOVAVOX — Notes de mise à jour
 ==============================
+v0.1.8
+------
+- Ajout d'une option démarrage automatique de l'application au démarrage de Start Citizen
 v0.1.7
 ------
 - Mise à jour de l’overlay : le fond clignote en vert lorsqu’une commande est exécutée et en rouge lorsque le micro est coupé.
