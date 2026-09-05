@@ -2,6 +2,9 @@ NOVAVOX — Notes de mise à jour
 ==============================
 v0.1.8
 ------
+- Syncronisation des maj avec le discord NovaVox https://discord.gg/NhhhGKv7F
+v0.1.8
+------
 - Ajout d'une option démarrage automatique de l'application au démarrage de Start Citizen
 v0.1.7
 ------
