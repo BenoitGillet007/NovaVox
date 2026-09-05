@@ -21,7 +21,7 @@ REM  Resultat : dist\NOVAVOX\NOVAVOX.exe
 REM  (plus tous les fichiers necessaires a cote, dans le meme
 REM  dossier -- c'est normal, ne pas deplacer seulement le .exe).
 REM ============================================================
-setlocal
+setlocal enabledelayedexpansion
 cd /d "%~dp0"
 
 REM Interpreteur Python a utiliser pour tout le script. Ta machine a un
@@ -96,7 +96,15 @@ REM detection automatique de PyInstaller, qui peut echouer selon les
 REM versions ("TclError: Can't find a usable init.tcl").
 set TCL_ARG=
 set TK_ARG=
-for /f "delims=" %%i in ('%PY% -c "import sys, os; print(os.path.join(sys.base_prefix, 'tcl'))"') do set TCL_BASE=%%i
+set "TCL_HELPER=%TEMP%\novavox_tcl_base.py"
+set "TCL_OUT=%TEMP%\novavox_tcl_base.txt"
+echo import sys, os> "%TCL_HELPER%"
+echo print(os.path.join(sys.base_prefix, "tcl"))>> "%TCL_HELPER%"
+%PY% "%TCL_HELPER%" > "%TCL_OUT%" 2>nul
+set "TCL_BASE="
+for /f "usebackq delims=" %%i in ("%TCL_OUT%") do set "TCL_BASE=%%i"
+del /q "%TCL_HELPER%" >nul 2>&1
+del /q "%TCL_OUT%" >nul 2>&1
 if exist "%TCL_BASE%\tcl8.6\init.tcl" (
     echo Tcl trouve : %TCL_BASE%\tcl8.6
     set TCL_ARG=--add-data "%TCL_BASE%\tcl8.6;tcl8.6"
@@ -234,6 +242,91 @@ if exist "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" (
 scp -i "%USERPROFILE%\.ssh\novavox_deploy" "Output\NovaVox_Setup.exe" ***REMOVED***@***REMOVED***:
 scp -i "%USERPROFILE%\.ssh\novavox_deploy" "version.json" ***REMOVED***@***REMOVED***:
 
+echo.
+REM ============================================================
+REM  Publication automatique sur GitHub Releases, en plus du
+REM  serveur Engooref ci-dessus. IMPORTANT : ceci n'a aucun lien
+REM  avec la verification de mise a jour cote client -- app.py
+REM  ne verifie les mises a jour QUE sur le serveur d'Engooref
+REM  (UPDATE_MANIFEST_URL, jamais touche). Ce bloc sert juste a
+REM  garder une copie versionnee/de secours sur GitHub a chaque
+REM  build.
+REM
+REM  Necessite GitHub CLI (gh), installe une seule fois
+REM  manuellement (https://cli.github.com/) puis connecte via
+REM  "gh auth login" une seule fois (session ensuite memorisee
+REM  sur cette machine). Depot prive : ce backup GitHub n'est
+REM  pas la source publique telechargee par les joueurs -- juste
+REM  une copie versionnee/de secours.
+REM ============================================================
+echo Publication sur GitHub Releases (BenoitGillet007/NovaVox, prive)...
+where gh >nul 2>&1
+if errorlevel 1 goto :gh_missing
+
+gh auth status >nul 2>&1
+if errorlevel 1 goto :gh_not_logged_in
+
+if not exist "Output\NovaVox_Setup.exe" goto :gh_no_exe
+
+set GH_REPO=BenoitGillet007/NovaVox
+set GH_TAG=v%APPVER%
+
+REM Notes de version : extrait uniquement le bloc de la version courante depuis patch_maj.txt, plutot que tout l'historique complet.
+set "NOTES_FILE=%TEMP%\novavox_release_notes.txt"
+if exist "%NOTES_FILE%" del /q "%NOTES_FILE%"
+set CAPTURING=0
+for /f "usebackq delims=" %%L in ("patch_maj.txt") do (
+    set "LINE=%%L"
+    echo(!LINE!| findstr /r "^v[0-9]" >nul
+    if not errorlevel 1 (
+        if "!CAPTURING!"=="1" (set CAPTURING=2) else (set CAPTURING=1)
+    ) else (
+        if "!CAPTURING!"=="1" (
+            echo(!LINE!| findstr /r "^------*$" >nul
+            if errorlevel 1 echo(!LINE!>>"%NOTES_FILE%"
+        )
+    )
+)
+if not exist "%NOTES_FILE%" echo Voir patch_maj.txt pour le detail.> "%NOTES_FILE%"
+
+gh release view %GH_TAG% --repo %GH_REPO% >nul 2>&1
+if errorlevel 1 goto :gh_create
+goto :gh_upload
+
+:gh_create
+gh release create %GH_TAG% "Output\NovaVox_Setup.exe" --repo %GH_REPO% --title "NovaVox %APPVER%" --notes-file "%NOTES_FILE%"
+if errorlevel 1 goto :gh_create_failed
+echo   -^> Release %GH_TAG% creee sur GitHub, NovaVox_Setup.exe joint.
+goto :gh_done
+
+:gh_create_failed
+echo   -^> ERREUR lors de la creation de la release GitHub %GH_TAG%.
+goto :gh_done
+
+:gh_upload
+gh release upload %GH_TAG% "Output\NovaVox_Setup.exe" --repo %GH_REPO% --clobber
+if errorlevel 1 goto :gh_upload_failed
+echo   -^> Release %GH_TAG% existante mise a jour sur GitHub.
+goto :gh_done
+
+:gh_upload_failed
+echo   -^> ERREUR lors de la mise a jour de la release GitHub %GH_TAG%.
+goto :gh_done
+
+:gh_missing
+echo   -^> gh introuvable, publication GitHub ignoree.
+echo      Installe-le depuis https://cli.github.com/ puis lance "gh auth login" une fois.
+goto :gh_done
+
+:gh_not_logged_in
+echo   -^> gh n'est pas connecte a un compte GitHub, publication ignoree.
+echo      Lance "gh auth login" une fois manuellement, puis relance ce script.
+goto :gh_done
+
+:gh_no_exe
+echo   -^> Output\NovaVox_Setup.exe introuvable, publication GitHub ignoree.
+
+:gh_done
 echo.
 echo ============================================================
 echo  Termine !
