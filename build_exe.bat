@@ -239,8 +239,8 @@ if exist "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" (
     echo   -^> Inno Setup introuvable, installateur non genere.
     echo      Installe-le depuis https://jrsoftware.org/isdl.php
 )
-scp -i "%USERPROFILE%\.ssh\novavox_deploy" "Output\NovaVox_Setup.exe" ***REMOVED***@***REMOVED***:
-scp -i "%USERPROFILE%\.ssh\novavox_deploy" "version.json" ***REMOVED***@***REMOVED***:
+scp -i "%USERPROFILE%\.ssh\***REMOVED***" "Output\NovaVox_Setup.exe" ***REMOVED***@***REMOVED***:
+scp -i "%USERPROFILE%\.ssh\***REMOVED***" "version.json" ***REMOVED***@***REMOVED***:
 
 echo.
 REM ============================================================
