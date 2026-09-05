@@ -234,7 +234,7 @@ for /f "usebackq delims=" %%L in ("patch_maj.txt") do (
     set "LINE=%%L"
     echo(!LINE!| findstr /r "^v[0-9]" >nul
     if not errorlevel 1 (
-        if "!CAPTURING!"=="1" (set CAPTURING=2) else (set CAPTURING=1)
+        if "!CAPTURING!"=="0" (set CAPTURING=2) else (set CAPTURING=1)
     ) else (
         if "!CAPTURING!"=="1" (
             echo(!LINE!| findstr /r "^------*$" >nul

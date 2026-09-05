@@ -1,6 +1,9 @@
 NOVAVOX — Notes de mise à jour
 ==============================
-v0.1.8
+v0.2.0
+------
+- débug notifs discord
+v0.1.9
 ------
 - Syncronisation des maj avec le discord NovaVox https://discord.gg/NhhhGKv7F
 v0.1.8
