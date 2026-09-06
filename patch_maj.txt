@@ -4,6 +4,7 @@ v0.2.2
 ------
 - Assistant IA (Ollama) plus réactif : le modèle reste chargé en mémoire 30 minutes après chaque question (au lieu de 5 minutes par défaut) pour éviter un rechargement lent depuis le disque à chaque question posée après une pause pendant le jeu — c'était la principale cause de lenteur ressentie sur Nova.
 - Longueur de génération plafonnée selon le réglage "courte/normale/longue" des réponses, pour éviter que le modèle ne génère plus de texte que nécessaire avant d'être raccourci après coup.
+- Reconnaissance vocale des commandes plus tolérante : une commande se déclenche maintenant même si un mot a été légèrement mal transcrit, tant que la phrase reste reconnaissable.
 v0.2.1
 ------
 - déploiement automatique des relaes guithub et recherche des mis a jours pour la version release guithub
