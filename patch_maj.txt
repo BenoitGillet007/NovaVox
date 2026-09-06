@@ -2,6 +2,7 @@ NOVAVOX — Notes de mise à jour
 ==============================
 v0.2.1
 ------
+- déploiement automatique des relaes guithub et recherche des mis a jours pour la version release guithub
 - Ajout du lien discord NovaVox dans les crédits
 - Ajout d'un contact mail dasn les crédits
 v0.2.0

@@ -368,12 +368,30 @@ BACKUP_KEEP_COUNT = 10
 # script.js). Fichier texte libre, à la racine du projet (à côté de
 # app.py), édité manuellement à chaque nouvelle version.
 PATCH_NOTES_FILE = os.path.join(BASE_DIR, "patch_maj.txt")
-# URL du manifest de mise à jour, hébergé sur le serveur d'Engooref.
-# Format attendu : {"version": "0.1.2", "url": "https://.../NovaVox_Setup.exe"}
-UPDATE_MANIFEST_URL = "https://***REMOVED***.1ercorpscolonial.fr/version.json"
+# URL du manifest de mise à jour. Par défaut, celui hébergé sur le
+# serveur d'Engooref. Peut être remplacée à la compilation par un
+# fichier gui/update_source.txt (voir build_exe.bat, qui génère deux
+# variantes d'installeur : une pointant ici, une pointant vers l'API
+# GitHub Releases) — ce fichier n'existe pas en développement normal,
+# d'où le repli automatique sur cette valeur par défaut dans ce cas.
+# Format attendu du manifest : {"version": "0.1.2", "url": "https://.../NovaVox_Setup.exe"}
+# (ou directement une réponse de l'API GitHub Releases, gérée séparément
+# dans check_for_update ci-dessous).
+def _load_update_manifest_url():
+    override_file = os.path.join(RESOURCE_DIR, "gui", "update_source.txt")
+    try:
+        with open(override_file, "r", encoding="utf-8") as f:
+            url = f.read().strip()
+        if url:
+            return url
+    except Exception:
+        pass
+    return "https://***REMOVED***.1ercorpscolonial.fr/version.json"
+
+UPDATE_MANIFEST_URL = _load_update_manifest_url()
 # Repli utilisé uniquement si patch_maj.txt est absent ou ne contient
 # aucune ligne "vX.Y.Z" reconnaissable (voir get_app_version ci-dessous).
-APP_VERSION_FALLBACK = "erreur maj"
+APP_VERSION_FALLBACK = "0.2.1"
 MODEL_DIR_DEFAULT = os.path.join(BASE_DIR, "model")
 GUI_INDEX = os.path.join(RESOURCE_DIR, "gui", "index.html")
 # Fenêtre séparée, superposée à Star Citizen — PAS une injection dans le
@@ -2094,7 +2112,14 @@ class Api:
         """Compare la version locale à celle du manifest distant. Ne bloque
         jamais l'appli en cas d'échec (pas de réseau, serveur down, etc.) —
         retourne juste "rien de nouveau" plutôt que de lever une exception
-        côté JS."""
+        côté JS.
+
+        Gère deux formats de manifest selon UPDATE_MANIFEST_URL :
+        - Format simple (serveur Engooref) : {"version": "...", "url": "..."}
+        - Réponse native de l'API GitHub Releases (contient "tag_name" et
+          "assets") : la version est déduite du tag (ex. "v0.2.0" → "0.2.0"),
+          et l'URL de téléchargement est celle de l'asset nommé
+          NovaVox_Setup.exe dans la release."""
         try:
             req = urllib.request.Request(
                 UPDATE_MANIFEST_URL, headers={"User-Agent": "NOVAVOX-updater"}
@@ -2102,8 +2127,17 @@ class Api:
             with urllib.request.urlopen(req, timeout=4) as r:
                 raw = r.read().decode("utf-8")
             data = json.loads(raw)
-            remote_version = str(data.get("version", "")).strip()
-            download_url = str(data.get("url", "")).strip()
+            if "tag_name" in data:
+                remote_version = str(data.get("tag_name", "")).strip().lstrip("vV")
+                download_url = ""
+                for asset in data.get("assets", []) or []:
+                    asset_name = str(asset.get("name", "")).strip().lower()
+                    if asset_name.endswith(".exe"):
+                        download_url = str(asset.get("browser_download_url", "")).strip()
+                        break
+            else:
+                remote_version = str(data.get("version", "")).strip()
+                download_url = str(data.get("url", "")).strip()
             local_version = get_app_version()
             self._log(
                 f"[Info] Check MAJ : manifest lu ({UPDATE_MANIFEST_URL}) → "

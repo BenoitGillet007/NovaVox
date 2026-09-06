@@ -238,7 +238,7 @@ for /f "usebackq delims=" %%L in ("patch_maj.txt") do (
     set "LINE=%%L"
     echo(!LINE!| findstr /r "^v[0-9]" >nul
     if not errorlevel 1 (
-        if "!CAPTURING!"=="0" (set CAPTURING=2) else (set CAPTURING=1)
+        if "!CAPTURING!"=="0" (set CAPTURING=1) else (set CAPTURING=2)
     ) else (
         if "!CAPTURING!"=="1" (
             echo(!LINE!| findstr /r "^------*$" >nul
@@ -249,11 +249,13 @@ for /f "usebackq delims=" %%L in ("patch_maj.txt") do (
 if not exist "%NOTES_FILE%" echo Voir patch_maj.txt pour le detail.> "%NOTES_FILE%"
 
 echo.
-echo Compilation de l'installateur (Inno Setup)...
-if exist "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" (
-    "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" /DMyAppVersion=%APPVER% installer.iss
+echo Compilation de l'installateur (Inno Setup) -- variante Engooref...
+set ISCC="C:\Program Files (x86)\Inno Setup 6\ISCC.exe"
+if exist %ISCC% (
+    echo https://***REMOVED***.1ercorpscolonial.fr/version.json> "%RES_DIR%\gui\update_source.txt"
+    %ISCC% /DMyAppVersion=%APPVER% installer.iss
     if exist "Output\NovaVox_Setup.exe" (
-        echo   -^> Installateur genere : Output\NovaVox_Setup.exe
+        echo   -^> Installateur genere (Engooref) : Output\NovaVox_Setup.exe
     ) else (
         echo   -^> ERREUR : la compilation de l'installateur a echoue.
     )
@@ -263,6 +265,22 @@ if exist "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" (
 )
 scp -i "%USERPROFILE%\.ssh\***REMOVED***" "Output\NovaVox_Setup.exe" ***REMOVED***@***REMOVED***:
 scp -i "%USERPROFILE%\.ssh\***REMOVED***" "version.json" ***REMOVED***@***REMOVED***:
+
+echo.
+echo Compilation de l'installateur (Inno Setup) -- variante GitHub...
+if exist "Output\NovaVox_Setup_GitHub.exe" del /q "Output\NovaVox_Setup_GitHub.exe"
+if exist %ISCC% (
+    echo https://api.github.com/repos/BenoitGillet007/NovaVox/releases/latest> "%RES_DIR%\gui\update_source.txt"
+    %ISCC% /DMyAppVersion=%APPVER% installer.iss
+    if exist "Output\NovaVox_Setup.exe" (
+        ren "Output\NovaVox_Setup.exe" "NovaVox_Setup_GitHub.exe"
+        echo   -^> Installateur genere (GitHub) : Output\NovaVox_Setup_GitHub.exe
+    ) else (
+        echo   -^> ERREUR : la compilation de l'installateur ^(variante GitHub^) a echoue.
+    )
+) else (
+    echo   -^> Inno Setup introuvable, installateur ^(variante GitHub^) non genere.
+)
 
 echo.
 echo Notification Discord...
@@ -292,7 +310,7 @@ if errorlevel 1 goto :gh_missing
 gh auth status >nul 2>&1
 if errorlevel 1 goto :gh_not_logged_in
 
-if not exist "Output\NovaVox_Setup.exe" goto :gh_no_exe
+if not exist "Output\NovaVox_Setup_GitHub.exe" goto :gh_no_exe
 
 set GH_REPO=BenoitGillet007/NovaVox
 set GH_TAG=v%APPVER%
@@ -302,9 +320,9 @@ if errorlevel 1 goto :gh_create
 goto :gh_upload
 
 :gh_create
-gh release create %GH_TAG% "Output\NovaVox_Setup.exe" --repo %GH_REPO% --title "NovaVox %APPVER%" --notes-file "%NOTES_FILE%"
+gh release create %GH_TAG% "Output\NovaVox_Setup_GitHub.exe" --repo %GH_REPO% --title "NovaVox %APPVER%" --notes-file "%NOTES_FILE%"
 if errorlevel 1 goto :gh_create_failed
-echo   -^> Release %GH_TAG% creee sur GitHub, NovaVox_Setup.exe joint.
+echo   -^> Release %GH_TAG% creee sur GitHub, NovaVox_Setup_GitHub.exe joint.
 goto :gh_done
 
 :gh_create_failed
@@ -312,7 +330,7 @@ echo   -^> ERREUR lors de la creation de la release GitHub %GH_TAG%.
 goto :gh_done
 
 :gh_upload
-gh release upload %GH_TAG% "Output\NovaVox_Setup.exe" --repo %GH_REPO% --clobber
+gh release upload %GH_TAG% "Output\NovaVox_Setup_GitHub.exe" --repo %GH_REPO% --clobber
 if errorlevel 1 goto :gh_upload_failed
 echo   -^> Release %GH_TAG% existante mise a jour sur GitHub.
 goto :gh_done
@@ -332,7 +350,7 @@ echo      Lance "gh auth login" une fois manuellement, puis relance ce script.
 goto :gh_done
 
 :gh_no_exe
-echo   -^> Output\NovaVox_Setup.exe introuvable, publication GitHub ignoree.
+echo   -^> Output\NovaVox_Setup_GitHub.exe introuvable, publication GitHub ignoree.
 
 :gh_done
 echo.
