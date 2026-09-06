@@ -386,7 +386,7 @@ def _load_update_manifest_url():
             return url
     except Exception:
         pass
-    return "https://***REMOVED***.1ercorpscolonial.fr/version.json"
+    return "https://novanox.1ercorpscolonial.fr/version.json"
 
 UPDATE_MANIFEST_URL = _load_update_manifest_url()
 # Repli utilisé uniquement si patch_maj.txt est absent ou ne contient

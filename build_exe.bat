@@ -227,7 +227,7 @@ set APPVER=%APPVER:v=%
 echo   -^> Version detectee : %APPVER%
 
 echo Mise a jour automatique de version.json...
-echo { "version": "%APPVER%", "url": "https://***REMOVED***.1ercorpscolonial.fr/NovaVox_Setup.exe" }> version.json
+echo { "version": "%APPVER%", "url": "https://novanox.1ercorpscolonial.fr/NovaVox_Setup.exe" }> version.json
 echo   -^> version.json mis a jour avec la version %APPVER%.
 
 REM Notes de version : extrait uniquement le bloc de la version courante depuis patch_maj.txt, plutot que tout l'historique complet. Partage entre la publication GitHub et la notification Discord ci-dessous.
@@ -249,13 +249,13 @@ for /f "usebackq delims=" %%L in ("patch_maj.txt") do (
 if not exist "%NOTES_FILE%" echo Voir patch_maj.txt pour le detail.> "%NOTES_FILE%"
 
 echo.
-echo Compilation de l'installateur (Inno Setup) -- variante Engooref...
+echo Compilation de l'installateur (Inno Setup) -- variante site officiel...
 set ISCC="C:\Program Files (x86)\Inno Setup 6\ISCC.exe"
 if exist %ISCC% (
-    echo https://***REMOVED***.1ercorpscolonial.fr/version.json> "%RES_DIR%\gui\update_source.txt"
+    echo https://novanox.1ercorpscolonial.fr/version.json> "%RES_DIR%\gui\update_source.txt"
     %ISCC% /DMyAppVersion=%APPVER% installer.iss
     if exist "Output\NovaVox_Setup.exe" (
-        echo   -^> Installateur genere (Engooref) : Output\NovaVox_Setup.exe
+        echo   -^> Installateur genere ^(site officiel^) : Output\NovaVox_Setup.exe
     ) else (
         echo   -^> ERREUR : la compilation de l'installateur a echoue.
     )
@@ -263,8 +263,32 @@ if exist %ISCC% (
     echo   -^> Inno Setup introuvable, installateur non genere.
     echo      Installe-le depuis https://jrsoftware.org/isdl.php
 )
-scp -i "%USERPROFILE%\.ssh\***REMOVED***" "Output\NovaVox_Setup.exe" ***REMOVED***@***REMOVED***:
-scp -i "%USERPROFILE%\.ssh\***REMOVED***" "version.json" ***REMOVED***@***REMOVED***:
+
+REM Details de connexion SSH (IP, utilisateur, nom de la cle) lus depuis
+REM un fichier local non versionne (voir .gitignore) plutot qu'ecrits en
+REM clair ici, puisque ce script se retrouve maintenant sur un depot
+REM GitHub public.
+set SSH_HOST=
+set SSH_USER=
+set SSH_KEYNAME=
+if exist "deploy_config.txt" (
+    for /f "usebackq delims=" %%A in ("deploy_config.txt") do (
+        if not defined SSH_HOST (
+            set "SSH_HOST=%%A"
+        ) else if not defined SSH_USER (
+            set "SSH_USER=%%A"
+        ) else if not defined SSH_KEYNAME (
+            set "SSH_KEYNAME=%%A"
+        )
+    )
+)
+if not defined SSH_HOST (
+    echo   -^> deploy_config.txt introuvable ou incomplet, envoi vers le site officiel ignore.
+    echo      Cree ce fichier ^(3 lignes : IP, utilisateur SSH, nom de la cle^) pour l'activer.
+) else (
+    scp -i "%USERPROFILE%\.ssh\%SSH_KEYNAME%" "Output\NovaVox_Setup.exe" %SSH_USER%@%SSH_HOST%:
+    scp -i "%USERPROFILE%\.ssh\%SSH_KEYNAME%" "version.json" %SSH_USER%@%SSH_HOST%:
+)
 
 echo.
 echo Compilation de l'installateur (Inno Setup) -- variante GitHub...
@@ -289,12 +313,10 @@ powershell -NoProfile -ExecutionPolicy Bypass -File "notify_discord.ps1" -Versio
 echo.
 REM ============================================================
 REM  Publication automatique sur GitHub Releases, en plus du
-REM  serveur Engooref ci-dessus. IMPORTANT : ceci n'a aucun lien
-REM  avec la verification de mise a jour cote client -- app.py
-REM  ne verifie les mises a jour QUE sur le serveur d'Engooref
-REM  (UPDATE_MANIFEST_URL, jamais touche). Ce bloc sert juste a
-REM  garder une copie versionnee/de secours sur GitHub a chaque
-REM  build.
+REM  site officiel ci-dessus. La variante "site officiel" de
+REM  l'installeur ne verifie les mises a jour que sur ce site ;
+REM  la variante "GitHub" (voir plus haut) verifie via l'API
+REM  GitHub Releases -- chacune reste independante de l'autre.
 REM
 REM  Necessite GitHub CLI (gh), installe une seule fois
 REM  manuellement (https://cli.github.com/) puis connecte via
