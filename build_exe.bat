@@ -251,18 +251,23 @@ if not exist "%NOTES_FILE%" echo Voir patch_maj.txt pour le detail.> "%NOTES_FIL
 echo.
 echo Compilation de l'installateur (Inno Setup) -- variante site officiel...
 set ISCC="C:\Program Files (x86)\Inno Setup 6\ISCC.exe"
-if exist %ISCC% (
-    echo https://novanox.1ercorpscolonial.fr/version.json> "%RES_DIR%\gui\update_source.txt"
-    %ISCC% /DMyAppVersion=%APPVER% installer.iss
-    if exist "Output\NovaVox_Setup.exe" (
-        echo   -^> Installateur genere ^(site officiel^) : Output\NovaVox_Setup.exe
-    ) else (
-        echo   -^> ERREUR : la compilation de l'installateur a echoue.
-    )
-) else (
-    echo   -^> Inno Setup introuvable, installateur non genere.
-    echo      Installe-le depuis https://jrsoftware.org/isdl.php
-)
+if not exist %ISCC% goto :iscc1_missing
+
+echo https://novanox.1ercorpscolonial.fr/version.json> "%RES_DIR%\gui\update_source.txt"
+%ISCC% /DMyAppVersion=%APPVER% installer.iss
+if not exist "Output\NovaVox_Setup.exe" goto :iscc1_failed
+echo   -^> Installateur genere ^(site officiel^) : Output\NovaVox_Setup.exe
+goto :iscc1_done
+
+:iscc1_missing
+echo   -^> Inno Setup introuvable, installateur non genere.
+echo      Installe-le depuis https://jrsoftware.org/isdl.php
+goto :iscc1_done
+
+:iscc1_failed
+echo   -^> ERREUR : la compilation de l'installateur a echoue.
+
+:iscc1_done
 
 REM Details de connexion SSH (IP, utilisateur, nom de la cle) lus depuis
 REM un fichier local non versionne (voir .gitignore) plutot qu'ecrits en
@@ -271,40 +276,49 @@ REM GitHub public.
 set SSH_HOST=
 set SSH_USER=
 set SSH_KEYNAME=
-if exist "deploy_config.txt" (
-    for /f "usebackq delims=" %%A in ("deploy_config.txt") do (
-        if not defined SSH_HOST (
-            set "SSH_HOST=%%A"
-        ) else if not defined SSH_USER (
-            set "SSH_USER=%%A"
-        ) else if not defined SSH_KEYNAME (
-            set "SSH_KEYNAME=%%A"
-        )
+if not exist "deploy_config.txt" goto :deploy_skip
+
+for /f "usebackq delims=" %%A in ("deploy_config.txt") do (
+    if not defined SSH_HOST (
+        set "SSH_HOST=%%A"
+    ) else if not defined SSH_USER (
+        set "SSH_USER=%%A"
+    ) else if not defined SSH_KEYNAME (
+        set "SSH_KEYNAME=%%A"
     )
 )
-if not defined SSH_HOST (
-    echo   -^> deploy_config.txt introuvable ou incomplet, envoi vers le site officiel ignore.
-    echo      Cree ce fichier ^(3 lignes : IP, utilisateur SSH, nom de la cle^) pour l'activer.
-) else (
-    scp -i "%USERPROFILE%\.ssh\%SSH_KEYNAME%" "Output\NovaVox_Setup.exe" %SSH_USER%@%SSH_HOST%:
-    scp -i "%USERPROFILE%\.ssh\%SSH_KEYNAME%" "version.json" %SSH_USER%@%SSH_HOST%:
-)
+if not defined SSH_HOST goto :deploy_skip
+
+scp -i "%USERPROFILE%\.ssh\%SSH_KEYNAME%" "Output\NovaVox_Setup.exe" %SSH_USER%@%SSH_HOST%:
+scp -i "%USERPROFILE%\.ssh\%SSH_KEYNAME%" "version.json" %SSH_USER%@%SSH_HOST%:
+goto :deploy_done
+
+:deploy_skip
+echo   -^> deploy_config.txt introuvable ou incomplet, envoi vers le site officiel ignore.
+echo      Cree ce fichier ^(3 lignes : IP, utilisateur SSH, nom de la cle^) pour l'activer.
+
+:deploy_done
 
 echo.
 echo Compilation de l'installateur (Inno Setup) -- variante GitHub...
 if exist "Output\NovaVox_Setup_GitHub.exe" del /q "Output\NovaVox_Setup_GitHub.exe"
-if exist %ISCC% (
-    echo https://api.github.com/repos/ammoniak07/NovaVox/releases/latest> "%RES_DIR%\gui\update_source.txt"
-    %ISCC% /DMyAppVersion=%APPVER% installer.iss
-    if exist "Output\NovaVox_Setup.exe" (
-        ren "Output\NovaVox_Setup.exe" "NovaVox_Setup_GitHub.exe"
-        echo   -^> Installateur genere (GitHub) : Output\NovaVox_Setup_GitHub.exe
-    ) else (
-        echo   -^> ERREUR : la compilation de l'installateur ^(variante GitHub^) a echoue.
-    )
-) else (
-    echo   -^> Inno Setup introuvable, installateur ^(variante GitHub^) non genere.
-)
+if not exist %ISCC% goto :iscc2_missing
+
+echo https://api.github.com/repos/ammoniak07/NovaVox/releases/latest> "%RES_DIR%\gui\update_source.txt"
+%ISCC% /DMyAppVersion=%APPVER% installer.iss
+if not exist "Output\NovaVox_Setup.exe" goto :iscc2_failed
+ren "Output\NovaVox_Setup.exe" "NovaVox_Setup_GitHub.exe"
+echo   -^> Installateur genere ^(GitHub^) : Output\NovaVox_Setup_GitHub.exe
+goto :iscc2_done
+
+:iscc2_missing
+echo   -^> Inno Setup introuvable, installateur ^(variante GitHub^) non genere.
+goto :iscc2_done
+
+:iscc2_failed
+echo   -^> ERREUR : la compilation de l'installateur ^(variante GitHub^) a echoue.
+
+:iscc2_done
 
 echo.
 echo Notification Discord...
