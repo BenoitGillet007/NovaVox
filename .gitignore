@@ -23,18 +23,13 @@ backups/
 erreurs.log
 crash_log.txt
 
-# Réglages et données propres à CETTE machine/cet utilisateur
-# (chacun les régénère automatiquement au premier lancement)
-window_config.json
-audio_config.json
-overlay_config.json
+# Tous les fichiers de configuration/données JSON : réglages propres à
+# chaque machine (window_config, audio_config, overlay_config...),
+# commandes et réglages IA personnels, version.json (régénéré tout seul
+# par build_exe.bat à chaque build). Le dépôt pouvant devenir public,
+# aucun .json local ne doit être partagé par défaut.
+*.json
 profiles/
-profiles_config.json
-
-# Éventuels fichiers de config perso (décommente si tu ne veux pas
-# partager tes commandes/réglages IA personnels dans le dépôt)
-# commands.json
-# ai_config.json
 
 # URL de webhook Discord (secrète, jamais versionnée)
 discord_webhook.txt
@@ -44,3 +39,7 @@ discord_webhook.txt
 .idea/
 Thumbs.db
 .DS_Store
+
+# Fichiers de test personnels
+sfs.txt
+test.txt
