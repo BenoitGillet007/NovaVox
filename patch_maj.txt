@@ -1,5 +1,8 @@
 NOVAVOX — Notes de mise à jour
 ==============================
+v0.2.1
+------
+- Ajout du lien discord NovaVox dans les crédits
 v0.2.0
 ------
 - débug notifs discord

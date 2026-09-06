@@ -682,11 +682,14 @@
   </div>
 
   <footer class="app-footer">
-    <span>NovaVox <button type="button" class="version-badge version-badge-btn" id="versionBtn" title="Voir les notes de mise à jour">v…</button></span>
-    <span class="footer-dot">·</span>
-    <span>Développé par : <strong>Ammoniak007</strong></span>
+      <span class="footer-line" style="width: 100%; display: flex; justify-content: center; align-items: center; gap: 8px;">
+          <span>NovaVox <button type="button" class="version-badge version-badge-btn" id="versionBtn" title="Voir les notes de mise à jour">v…</button></span>
+          <span class="footer-dot">·</span>
+          <span>Développé par : <strong>Ammoniak007</strong></span>
+      </span>
+      <span><a href="https://discord.gg/KDe7Eccax" target="_blank" style="color: #5865F2;">Discord NovaVox</a></span>
   </footer>
-
+  
   <!-- Notes de mise à jour, lues depuis patch_maj.txt (racine de
        l'application) via Api.get_patch_notes() — voir script.js. -->
   <div class="modal-overlay hidden" id="patchNotesModal">

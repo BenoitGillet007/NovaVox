@@ -373,7 +373,7 @@ PATCH_NOTES_FILE = os.path.join(BASE_DIR, "patch_maj.txt")
 UPDATE_MANIFEST_URL = "https://***REMOVED***.1ercorpscolonial.fr/version.json"
 # Repli utilisé uniquement si patch_maj.txt est absent ou ne contient
 # aucune ligne "vX.Y.Z" reconnaissable (voir get_app_version ci-dessous).
-APP_VERSION_FALLBACK = "0.2.0"
+APP_VERSION_FALLBACK = "erreur maj"
 MODEL_DIR_DEFAULT = os.path.join(BASE_DIR, "model")
 GUI_INDEX = os.path.join(RESOURCE_DIR, "gui", "index.html")
 # Fenêtre séparée, superposée à Star Citizen — PAS une injection dans le

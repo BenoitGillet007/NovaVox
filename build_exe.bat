@@ -226,6 +226,10 @@ for /f "tokens=1 delims= " %%v in ('findstr /r "^v[0-9]" patch_maj.txt') do (
 set APPVER=%APPVER:v=%
 echo   -^> Version detectee : %APPVER%
 
+echo Mise a jour automatique de version.json...
+echo { "version": "%APPVER%", "url": "https://***REMOVED***.1ercorpscolonial.fr/NovaVox_Setup.exe" }> version.json
+echo   -^> version.json mis a jour avec la version %APPVER%.
+
 REM Notes de version : extrait uniquement le bloc de la version courante depuis patch_maj.txt, plutot que tout l'historique complet. Partage entre la publication GitHub et la notification Discord ci-dessous.
 set "NOTES_FILE=%TEMP%\novavox_release_notes.txt"
 if exist "%NOTES_FILE%" del /q "%NOTES_FILE%"

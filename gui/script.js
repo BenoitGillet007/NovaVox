@@ -99,7 +99,8 @@ async function init() {
     state.listenHotkey = data.listenHotkey || null;
     state.listenHotkeyAvailable = data.listenHotkeyAvailable !== false;
     if (data.appVersion) {
-      document.getElementById("versionBtn").textContent = `v${data.appVersion}`;
+      const looksLikeVersion = /^\d/.test(data.appVersion);
+      document.getElementById("versionBtn").textContent = looksLikeVersion ? `v${data.appVersion}` : data.appVersion;
     }
     state.profiles = data.profiles || [];
     state.activeProfile = data.activeProfile || null;

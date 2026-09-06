@@ -129,6 +129,7 @@ body {
   font-family: var(--font-mono);
   font-size: 11.5px;
   color: var(--muted);
+  flex-wrap: wrap;
 }
 .app-footer .version-badge { padding: 2px 8px; }
 .version-badge-btn {
