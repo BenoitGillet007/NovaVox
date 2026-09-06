@@ -5768,6 +5768,16 @@ class Api:
             vosk.SetLogLevel(-1)
             model = vosk.Model(model_path)
             recognizer = vosk.KaldiRecognizer(model, SAMPLE_RATE)
+            # Demande à Vosk ses N meilleures hypothèses au lieu d'une
+            # seule : un mot mal transcrit dans la meilleure hypothèse
+            # ("train d'atterrissache") n'empêche plus une commande de se
+            # déclencher si une hypothèse voisine, presque aussi probable
+            # pour le décodeur, correspond exactement (voir _handle_text).
+            # Coût quasi nul (le décodeur explore déjà ces chemins en
+            # interne), et n'affecte en rien le mot d'activation "Nova" ni
+            # les questions libres posées à l'IA — seule la correspondance
+            # de commande directe en tient compte.
+            recognizer.SetMaxAlternatives(3)
         except Exception as e:
             self._log(f"[Erreur] Impossible de charger le modèle : {e}", "error")
             self.listening = False
@@ -5834,7 +5844,17 @@ class Api:
 
                     if recognizer.AcceptWaveform(data):
                         result = json.loads(recognizer.Result())
-                        text = result.get("text", "").strip()
+                        # Avec SetMaxAlternatives activé, Result() renvoie
+                        # {"alternatives": [{"text": ..., "confidence": ...}, ...]}
+                        # (déjà triées par confiance décroissante par Vosk) au
+                        # lieu d'un simple {"text": ...}.
+                        alt_list = result.get("alternatives")
+                        if alt_list:
+                            alt_texts = [a.get("text", "").strip() for a in alt_list]
+                            alt_texts = [t for t in alt_texts if t]
+                        else:
+                            alt_texts = []
+                        text = alt_texts[0] if alt_texts else result.get("text", "").strip()
 
                         if self._is_speaking or time.time() < self._speech_mute_until:
                             # Anti-écho : on jette ce qui vient d'être reconnu
@@ -5850,7 +5870,7 @@ class Api:
 
                         if text:
                             self._log(f"Reconnu : « {text} »", "info")
-                            self._handle_text(text)
+                            self._handle_text(text, alt_texts=alt_texts[1:])
         except Exception as e:
             self._log(f"[Erreur audio] {e}", "error")
         finally:
@@ -5863,7 +5883,7 @@ class Api:
             else:
                 self._status("idle", "Arrêté", "Système en veille")
 
-    def _handle_text(self, text):
+    def _handle_text(self, text, alt_texts=None):
         text_norm = text.lower().strip()
         wake_word = self.ai_name.lower().strip()
 
@@ -5905,8 +5925,21 @@ class Api:
                     self._log(f"{self.ai_name} à l'écoute, pose ta question...", "info")
                 return
 
-        # Étape 3 : correspondance normale des commandes vocales.
+        # Étape 3 : correspondance normale des commandes vocales. Si la
+        # meilleure hypothèse de Vosk ne correspond à aucune commande, on
+        # retente avec les hypothèses suivantes (voir SetMaxAlternatives
+        # dans _listen_loop) avant d'abandonner — le décodeur a souvent
+        # une variante presque aussi probable qui, elle, correspond
+        # exactement à la phrase configurée.
         idx = self._find_strict_command_match(text_norm)
+        if idx is None:
+            for alt in (alt_texts or []):
+                alt_norm = alt.lower().strip()
+                if not alt_norm:
+                    continue
+                idx = self._find_strict_command_match(alt_norm)
+                if idx is not None:
+                    break
         if idx is not None:
             self._execute_command(idx)
 
