@@ -270,7 +270,7 @@ echo.
 echo Compilation de l'installateur (Inno Setup) -- variante GitHub...
 if exist "Output\NovaVox_Setup_GitHub.exe" del /q "Output\NovaVox_Setup_GitHub.exe"
 if exist %ISCC% (
-    echo https://api.github.com/repos/BenoitGillet007/NovaVox/releases/latest> "%RES_DIR%\gui\update_source.txt"
+    echo https://api.github.com/repos/ammoniak07/NovaVox/releases/latest> "%RES_DIR%\gui\update_source.txt"
     %ISCC% /DMyAppVersion=%APPVER% installer.iss
     if exist "Output\NovaVox_Setup.exe" (
         ren "Output\NovaVox_Setup.exe" "NovaVox_Setup_GitHub.exe"
@@ -303,7 +303,7 @@ REM  sur cette machine). Depot prive : ce backup GitHub n'est
 REM  pas la source publique telechargee par les joueurs -- juste
 REM  une copie versionnee/de secours.
 REM ============================================================
-echo Publication sur GitHub Releases (BenoitGillet007/NovaVox, prive)...
+echo Publication sur GitHub Releases (ammoniak07/NovaVox)...
 where gh >nul 2>&1
 if errorlevel 1 goto :gh_missing
 
@@ -312,7 +312,7 @@ if errorlevel 1 goto :gh_not_logged_in
 
 if not exist "Output\NovaVox_Setup_GitHub.exe" goto :gh_no_exe
 
-set GH_REPO=BenoitGillet007/NovaVox
+set GH_REPO=ammoniak07/NovaVox
 set GH_TAG=v%APPVER%
 
 gh release view %GH_TAG% --repo %GH_REPO% >nul 2>&1
