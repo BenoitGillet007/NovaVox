@@ -5015,6 +5015,16 @@ class Api:
         num_ctx = max(2048, min(16384, ((estimated_tokens // 1024) + 1) * 1024))
         return num_ctx
 
+    # Plafond de tokens générés par réponse, selon le réglage de longueur
+    # choisi par l'utilisateur. Sans cette limite, Ollama génère souvent
+    # bien plus de texte que nécessaire (le modèle continue d'enchaîner
+    # phrases et digressions) avant que _enforce_short_reply ne le
+    # retaille après coup — un gaspillage direct de temps de génération,
+    # qui est le principal facteur de latence perçue sur un PC sans GPU
+    # dédié à l'IA (Star Citizen occupe déjà le GPU). Valeurs généreuses
+    # pour ne jamais couper une réponse légitime au milieu.
+    AI_NUM_PREDICT_BY_LENGTH = {"short": 80, "normal": 300, "long": 800}
+
     def _ai_reply_thread(self):
         # GARDE-FOU : vérifie d'abord rapidement (2s max) qu'Ollama répond
         # avant de tenter la requête de génération complète. Si Ollama
@@ -5040,11 +5050,25 @@ class Api:
             "content": ai_system_prompt(self.ai_name, self.ai_custom_context, self.user_name, self.ai_response_length)
                        + game_state_block,
         }] + self.ai_history
+        num_predict = self.AI_NUM_PREDICT_BY_LENGTH.get(
+            self.ai_response_length, self.AI_NUM_PREDICT_BY_LENGTH["normal"]
+        )
         payload = json.dumps({
             "model": self.ai_model,
             "messages": messages,
             "stream": False,
-            "options": {"num_ctx": self._compute_num_ctx(messages)},
+            "options": {
+                "num_ctx": self._compute_num_ctx(messages),
+                "num_predict": num_predict,
+            },
+            # Garde le modèle chargé en mémoire 30 minutes après chaque
+            # usage (au lieu des 5 minutes par défaut d'Ollama) : Nova est
+            # utilisée par intermittence pendant une session de jeu, et un
+            # modèle déchargé doit être entièrement rechargé depuis le
+            # disque à la requête suivante — souvent bien plus lent que la
+            # génération elle-même sur un PC sans GPU dédié à l'IA. C'est
+            # la principale cause de lenteur perçue de l'assistant IA.
+            "keep_alive": "30m",
         }).encode("utf-8")
 
         req = urllib.request.Request(
