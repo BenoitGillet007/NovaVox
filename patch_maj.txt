@@ -1,5 +1,8 @@
 NOVAVOX — Notes de mise à jour
 ==============================
+v0.2.3
+------
+
 v0.2.2
 ------
 - Assistant IA (Ollama) plus réactif : le modèle reste chargé en mémoire 30 minutes après chaque question (au lieu de 5 minutes par défaut) pour éviter un rechargement lent depuis le disque à chaque question posée après une pause pendant le jeu — c'était la principale cause de lenteur ressentie sur Nova.
