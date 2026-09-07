@@ -7028,3 +7028,16 @@ def _install_crash_handler():
 if __name__ == "__main__":
     _install_crash_handler()
     main()
+    # Filet de sécurité : sur certaines configurations, le runtime .NET
+    # embarqué (pythonnet/WebView2, utilisé pour l'affichage) garde des
+    # threads internes vivants même une fois toutes les fenêtres fermées,
+    # ce qui empêchait le processus de se terminer tout seul — NOVAVOX.exe
+    # restait visible dans le Gestionnaire des tâches, obligeant à le tuer
+    # manuellement avant de pouvoir installer une mise à jour (le fichier
+    # restait verrouillé). Toutes les étapes de fermeture propre
+    # (sauvegarde de la fenêtre, fermeture de l'overlay, arrêt de l'icône
+    # barre des tâches) ont déjà eu lieu de façon synchrone avant que
+    # webview.start() ne rende la main dans main() ci-dessus (voir
+    # _on_closing) : on peut donc forcer la sortie du processus ici sans
+    # rien perdre.
+    os._exit(0)
