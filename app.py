@@ -2531,6 +2531,21 @@ class Api:
             pass
         return self.commands
 
+    def speak_command_phrase(self, index):
+        """Prononce à voix haute la phrase d'une commande (bouton ▶ du
+        panneau), via Piper, pour permettre de vérifier comment elle sera
+        entendue une fois reconnue."""
+        try:
+            cmd = self.commands[int(index)]
+        except (IndexError, ValueError, TypeError):
+            return {"ok": False, "error": "Commande introuvable."}
+        if cmd.get("type") == "title":
+            return {"ok": False, "error": "Pas de voix pour un titre."}
+        if not self.piper_voice:
+            return {"ok": False, "error": "Aucune voix Piper sélectionnée (voir Réglages > Moteur vocal)."}
+        self._speak(cmd["phrase"])
+        return {"ok": True}
+
     # ------------------------------------------- Export/Import config --
 
     # Fichiers de configuration inclus dans export_config/import_config
