@@ -1857,6 +1857,17 @@ class Api:
         else:
             self.commands = load_commands()
         self.model_path = MODEL_DIR_DEFAULT
+        # Cache du modèle Vosk déjà chargé (voir _listen_loop) : recharger
+        # vosk.Model(model_path) à chaque démarrage d'écoute est coûteux
+        # (jusqu'à ~20s observés dans le build compilé, contre ~0.2s en
+        # exécution Python directe — vraisemblablement un antivirus qui
+        # scrute chaque lecture disque de l'exe compilé) alors que rien ne
+        # change entre deux activations tant que le dossier du modèle
+        # reste le même. On ne recharge donc que si le chemin a changé
+        # (nouveau modèle sélectionné) plutôt qu'à chaque clic sur
+        # "Écouter".
+        self._vosk_model = None
+        self._vosk_model_path = None
         self.listening = False
         self.stop_event = threading.Event()
         self.last_trigger = {}
@@ -5817,18 +5828,31 @@ class Api:
     def _listen_loop(self, model_path):
         try:
             vosk.SetLogLevel(-1)
-            # Chronométré et loggé (voir aussi get_vosk_version) : sert à
-            # diagnostiquer un chargement anormalement lent (ex. build
-            # PyInstaller très supérieur à l'exécution en Python direct),
-            # en distinguant le temps de chargement du modèle lui-même du
-            # reste de l'initialisation.
-            _model_load_start = time.time()
-            model = vosk.Model(model_path)
-            self._log(
-                f"Modèle vocal (Vosk {get_vosk_version()}) chargé en "
-                f"{time.time() - _model_load_start:.1f}s.",
-                "info",
-            )
+            # Réutilise le modèle déjà chargé tant que le dossier
+            # sélectionné n'a pas changé (voir self._vosk_model dans
+            # __init__) : recharger vosk.Model(model_path) à chaque
+            # activation de l'écoute est coûteux (jusqu'à ~20s observés
+            # dans le build compilé, contre ~0.2s en exécution Python
+            # directe pour EXACTEMENT le même modèle) alors que rien ne
+            # change entre deux activations successives.
+            if self._vosk_model is not None and self._vosk_model_path == model_path:
+                model = self._vosk_model
+                self._log(f"Modèle vocal (Vosk {get_vosk_version()}) réutilisé (déjà chargé).", "info")
+            else:
+                # Chronométré et loggé (voir aussi get_vosk_version) : sert
+                # à diagnostiquer un chargement anormalement lent (ex.
+                # build PyInstaller très supérieur à l'exécution en Python
+                # direct), en distinguant le temps de chargement du modèle
+                # lui-même du reste de l'initialisation.
+                _model_load_start = time.time()
+                model = vosk.Model(model_path)
+                self._log(
+                    f"Modèle vocal (Vosk {get_vosk_version()}) chargé en "
+                    f"{time.time() - _model_load_start:.1f}s.",
+                    "info",
+                )
+                self._vosk_model = model
+                self._vosk_model_path = model_path
             recognizer = vosk.KaldiRecognizer(model, SAMPLE_RATE)
             # Demande à Vosk ses N meilleures hypothèses au lieu d'une
             # seule : un mot mal transcrit dans la meilleure hypothèse
