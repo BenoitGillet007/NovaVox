@@ -463,6 +463,10 @@ body {
 @media (max-width: 860px) {
   .main-grid { grid-template-columns: 1fr; }
 }
+/* Journal système masqué depuis les Réglages (voir hideSystemLogToggle) :
+   la liste des commandes reprend toute la largeur plutôt que de laisser un
+   vide à la place du panneau caché. */
+.main-grid.log-hidden { grid-template-columns: 1fr; }
 .panel-header {
   display: flex;
   align-items: center;

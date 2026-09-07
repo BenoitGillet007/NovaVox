@@ -1752,6 +1752,16 @@ def _import_runtime_dependencies():
     try:
         import pydirectinput as _pdi
         _pdi.PAUSE = 0.02
+        # Désactive le fail-safe hérité de PyAutoGUI (abandon de l'action
+        # si le curseur souris se trouve dans un coin de l'écran) : pensé
+        # pour interrompre un script d'automatisation de bureau qui
+        # dérape, il n'a pas de sens ici et casse au contraire les
+        # commandes légitimes qui impliquent un clic (ex. "mouseleft") —
+        # le curseur peut tout à fait se retrouver dans un coin en jeu
+        # sans rapport avec NOVAVOX (TrackIR, jeu qui déplace lui-même le
+        # curseur, plusieurs écrans...), ce qui déclenchait alors
+        # FailSafeException et empêchait la commande de s'exécuter.
+        _pdi.FAILSAFE = False
         pydirectinput = _pdi
     except ImportError:
         pydirectinput = None
