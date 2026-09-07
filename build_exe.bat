@@ -208,6 +208,21 @@ if exist "audio_config.json" (
     copy /y "audio_config.json" "dist\NOVAVOX\audio_config.json" >nul
     echo   -^> audio_config.json copie.
 )
+REM icon.ico n'est passe a PyInstaller que via --icon, qui l'embarque
+REM comme icone du FICHIER .exe (visible dans l'Explorateur/les
+REM raccourcis) -- ca ne le copie PAS a cote de l'exe. Or _build_tray_icon_image
+REM (app.py) cherche justement "icon.ico" a cote de l'exe (BASE_DIR) pour
+REM l'icone de la barre des taches (systray) : sans cette copie, le build
+REM compile retombe silencieusement sur un repli generique (hexagone
+REM dessine a la volee) au lieu du vrai logo NovaVox, alors que le lancement
+REM depuis les sources (python app.py, ou icon.ico est deja a la racine du
+REM projet) affiche le bon logo -- d'ou un logo different entre les deux.
+if exist "icon.ico" (
+    copy /y "icon.ico" "dist\NOVAVOX\icon.ico" >nul
+    echo   -^> icon.ico copie ^(icone de la barre des taches^).
+) else (
+    echo   -^> icon.ico absent du dossier source : l'icone de la barre des taches utilisera un repli generique.
+)
 if exist "patch_maj.txt" (
     copy /y "patch_maj.txt" "dist\NOVAVOX\patch_maj.txt" >nul
     echo   -^> patch_maj.txt copie ^(notes de mise a jour^).
