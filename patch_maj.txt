@@ -6,6 +6,7 @@ v0.2.3
 - Correction d'un cas où une commande impliquant un clic souris (ex. « mouseleft ») pouvait échouer silencieusement avec une erreur « fail-safe » dans le journal système, notamment en cas d'utilisation avec un TrackIR.
 - Nouvelle option dans Réglages > NovaVox pour masquer le journal système de la fenêtre principale.
 - Ajout d'un bouton ▶️ sur chaque commande pour écouter sa phrase lue à voix haute (via la voix Piper configurée).
+- Correction des touches du pavé numérique (num0-num9) : elles étaient silencieusement ignorées en jeu (le journal affichait « Action déclenchée » mais aucune touche n'était réellement envoyée), à cause d'un manque dans la bibliothèque clavier utilisée. Envoyées désormais directement comme la touche ISO 102e.
 
 v0.2.2
 ------

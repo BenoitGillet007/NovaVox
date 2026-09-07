@@ -754,6 +754,20 @@ KEYEVENTF_SCANCODE = 0x0008
 KEYEVENTF_KEYUP = 0x0002
 ISO102_SCAN_CODE = 0x56  # DIK_OEM_102 : touche "< > \" à gauche de Z/W en AZERTY
 
+# Touches numériques du pavé numérique (num0-num9) : leur code de balayage
+# est bien défini dans pydirectinput.KEYBOARD_MAPPING... mais en commentaire
+# (jamais activé), contrairement à numlock/divide/multiply/subtract/add/
+# decimal qui, eux, fonctionnent. Résultat : pydirectinput.keyDown("num1")
+# ne lève aucune exception (le nom de touche est juste absent du
+# dictionnaire, donc keyDown() retourne silencieusement sans rien envoyer)
+# — la commande apparaît "déclenchée" dans le journal alors qu'aucune
+# touche n'atteint le jeu. Mêmes codes que le dictionnaire de pydirectinput,
+# envoyés nous-mêmes via SendInput comme pour ISO102_SCAN_CODE ci-dessus.
+NUMPAD_DIGIT_SCAN_CODES = {
+    "num0": 0x52, "num1": 0x4F, "num2": 0x50, "num3": 0x51, "num4": 0x4B,
+    "num5": 0x4C, "num6": 0x4D, "num7": 0x47, "num8": 0x48, "num9": 0x49,
+}
+
 PUL = ctypes.POINTER(ctypes.c_ulong)
 
 
@@ -6118,10 +6132,14 @@ class Api:
             else:
                 keyboard_keys.append(k)
 
-        # La touche ISO 102e ("< > \") est envoyée nous-mêmes via SendInput
-        # (voir _send_raw_scan_code), indépendamment de pydirectinput —
-        # elle ne doit donc pas être bloquée si pydirectinput est absent.
-        needs_pydirectinput = mouse_button is not None or any(k != "iso102" for k in keyboard_keys)
+        # La touche ISO 102e ("< > \") et les chiffres du pavé numérique
+        # (num0-num9, voir NUMPAD_DIGIT_SCAN_CODES) sont envoyés nous-mêmes
+        # via SendInput (voir _send_raw_scan_code), indépendamment de
+        # pydirectinput — ils ne doivent donc pas être bloqués si
+        # pydirectinput est absent.
+        needs_pydirectinput = mouse_button is not None or any(
+            k != "iso102" and k not in NUMPAD_DIGIT_SCAN_CODES for k in keyboard_keys
+        )
         if pydirectinput is None and needs_pydirectinput:
             return
         # GARDE-FOU CRITIQUE : les touches déjà enfoncées (keyDown) DOIVENT
@@ -6138,6 +6156,8 @@ class Api:
             for k in keyboard_keys:
                 if k == "iso102":
                     _send_raw_scan_code(ISO102_SCAN_CODE, key_up=False)
+                elif k in NUMPAD_DIGIT_SCAN_CODES:
+                    _send_raw_scan_code(NUMPAD_DIGIT_SCAN_CODES[k], key_up=False)
                 else:
                     pydirectinput.keyDown(k)
                 pressed_keys.append(k)
@@ -6161,6 +6181,8 @@ class Api:
                 try:
                     if k == "iso102":
                         _send_raw_scan_code(ISO102_SCAN_CODE, key_up=True)
+                    elif k in NUMPAD_DIGIT_SCAN_CODES:
+                        _send_raw_scan_code(NUMPAD_DIGIT_SCAN_CODES[k], key_up=True)
                     else:
                         pydirectinput.keyUp(k)
                 except Exception as e:
