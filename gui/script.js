@@ -90,6 +90,7 @@ async function init() {
   const bar = document.getElementById("splashBarFill");
   if (bar) bar.style.width = "55%";
   applyStoredTheme();
+  applyStoredLogVisibility();
   bindEvents();
   try {
     const data = await window.pywebview.api.get_state();
@@ -158,6 +159,7 @@ function showUpdateBanner(version, url) {
 
 function bindEvents() {
   document.getElementById("themeToggle").addEventListener("click", toggleTheme);
+  document.getElementById("hideSystemLogToggle").addEventListener("change", onHideSystemLogToggle);
   document.getElementById("openSettingsBtn").addEventListener("click", openSettings);
   document.getElementById("closeSettingsBtn").addEventListener("click", closeSettings);
   document.querySelectorAll(".settings-tab-btn").forEach((btn) => {
@@ -295,6 +297,21 @@ function toggleTheme() {
   document.documentElement.setAttribute("data-theme", next);
   localStorage.setItem("theme", next);
   document.getElementById("themeToggle").textContent = next === "dark" ? "🌙" : "☀️";
+}
+
+/* --------------------------------------------- Journal système (afficher/masquer) */
+
+function applyStoredLogVisibility() {
+  const hidden = localStorage.getItem("hideSystemLog") === "1";
+  document.querySelector(".log-panel").classList.toggle("hidden", hidden);
+  document.querySelector(".main-grid").classList.toggle("log-hidden", hidden);
+  const toggle = document.getElementById("hideSystemLogToggle");
+  if (toggle) toggle.checked = hidden;
+}
+
+function onHideSystemLogToggle(e) {
+  localStorage.setItem("hideSystemLog", e.target.checked ? "1" : "0");
+  applyStoredLogVisibility();
 }
 
 /* --------------------------------------------------------- Commandes */
