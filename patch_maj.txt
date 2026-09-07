@@ -5,6 +5,7 @@ v0.2.3
 - Correction d'un processus NovaVox qui pouvait rester actif en arrière-plan après avoir quitté l'application, obligeant à le tuer manuellement dans le Gestionnaire des tâches avant de pouvoir installer une mise à jour.
 - Correction d'un cas où une commande impliquant un clic souris (ex. « mouseleft ») pouvait échouer silencieusement avec une erreur « fail-safe » dans le journal système, notamment en cas d'utilisation avec un TrackIR.
 - Nouvelle option dans Réglages > NovaVox pour masquer le journal système de la fenêtre principale.
+- Ajout d'un bouton ▶️ sur chaque commande pour écouter sa phrase lue à voix haute (via la voix Piper configurée).
 
 v0.2.2
 ------
