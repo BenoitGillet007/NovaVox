@@ -103,6 +103,9 @@ async function init() {
       const looksLikeVersion = /^\d/.test(data.appVersion);
       document.getElementById("versionBtn").textContent = looksLikeVersion ? `v${data.appVersion}` : data.appVersion;
     }
+    if (data.voskVersion) {
+      document.getElementById("versionBtn").title = `Voir les notes de mise à jour · Moteur vocal Vosk ${data.voskVersion}`;
+    }
     state.profiles = data.profiles || [];
     state.activeProfile = data.activeProfile || null;
     state.profileCycleHotkey = data.profileCycleHotkey || null;
