@@ -1,5 +1,8 @@
 NOVAVOX — Notes de mise à jour
 ==============================
+v0.2.4
+------
+- Correction de l'installateur de mise à jour : comme NovaVox reste actif en arrière-plan (icône barre des tâches) quand on ferme sa fenêtre, l'installateur pouvait afficher une erreur « n'a pas pu arrêter toutes les applications automatiquement » au lieu de le fermer proprement lui-même avant de mettre à jour les fichiers.
 v0.2.3
 ------
 - Correction d'un processus NovaVox qui pouvait rester actif en arrière-plan après avoir quitté l'application, obligeant à le tuer manuellement dans le Gestionnaire des tâches avant de pouvoir installer une mise à jour.
@@ -7,8 +10,6 @@ v0.2.3
 - Nouvelle option dans Réglages > NovaVox pour masquer le journal système de la fenêtre principale.
 - Ajout d'un bouton ▶️ sur chaque commande pour écouter sa phrase lue à voix haute (via la voix Piper configurée).
 - Correction des touches du pavé numérique (num0-num9) : elles étaient silencieusement ignorées en jeu (le journal affichait « Action déclenchée » mais aucune touche n'était réellement envoyée), à cause d'un manque dans la bibliothèque clavier utilisée. Envoyées désormais directement comme la touche ISO 102e.
-- Correction de l'installateur de mise à jour : comme NovaVox reste actif en arrière-plan (icône barre des tâches) quand on ferme sa fenêtre, l'installateur pouvait afficher une erreur « n'a pas pu arrêter toutes les applications automatiquement » au lieu de le fermer proprement lui-même avant de mettre à jour les fichiers.
-
 v0.2.2
 ------
 - Assistant IA (Ollama) plus réactif : le modèle reste chargé en mémoire 30 minutes après chaque question (au lieu de 5 minutes par défaut) pour éviter un rechargement lent depuis le disque à chaque question posée après une pause pendant le jeu — c'était la principale cause de lenteur ressentie sur Nova.
