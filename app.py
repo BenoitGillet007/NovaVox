@@ -935,6 +935,28 @@ def model_folder_is_valid(path):
     return os.path.isdir(os.path.join(path, "am")) and os.path.isdir(os.path.join(path, "conf"))
 
 
+def get_model_folder_info(path):
+    """Nom et taille sur le disque du dossier de modèle Vosk sélectionné —
+    affichés à côté de la version de Vosk (voir get_vosk_version) pour
+    qu'on distingue d'un coup d'œil LE MOTEUR utilisé (identique partout)
+    DU MODÈLE chargé (peut varier énormément en taille/temps de
+    chargement d'une installation à l'autre : "petit" ~41 Mo contre
+    "précis" ~1,4 Go, voir VOSK_MODELS). None si le dossier est absent ou
+    invalide."""
+    if not model_folder_is_valid(path):
+        return None
+    total_bytes = 0
+    for root, _dirs, files in os.walk(path):
+        for name in files:
+            try:
+                total_bytes += os.path.getsize(os.path.join(root, name))
+            except OSError:
+                pass
+    size_mo = total_bytes / (1024 * 1024)
+    size_label = f"{size_mo / 1024:.2f} Go" if size_mo >= 1024 else f"{size_mo:.1f} Mo"
+    return {"name": os.path.basename(os.path.normpath(path)), "sizeLabel": size_label}
+
+
 def _normalize_commands(items):
     """Assure la compatibilité ascendante et la cohérence de la liste des
     éléments (commandes ET titres de groupe, mélangés dans une seule liste
@@ -2136,6 +2158,7 @@ class Api:
             "kbLayout": self.kb_layout,
             "appVersion": get_app_version(),
             "voskVersion": get_vosk_version(),
+            "modelInfo": get_model_folder_info(self.model_path),
             "profiles": list_profiles(),
             "activeProfile": _active_profile_id,
             "profileCycleHotkey": self.profile_cycle_hotkey,
@@ -2783,6 +2806,15 @@ class Api:
             return None
         self.model_path = path
         return self.model_path
+
+    def get_model_info(self, path=None):
+        """Nom/taille du dossier de modèle Vosk à afficher à côté de la
+        version de Vosk (voir get_model_folder_info) — appelé par le JS
+        après un changement de dossier (Parcourir / téléchargement d'un
+        nouveau modèle) pour rafraîchir l'infobulle sans redemander tout
+        l'état de l'appli. Sans argument, utilise le dossier actuellement
+        retenu (self.model_path)."""
+        return get_model_folder_info(path or self.model_path)
 
     # ------------------------------------------------- Réinitialisation --
 
