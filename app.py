@@ -435,6 +435,17 @@ def get_app_version():
         pass
     return APP_VERSION_FALLBACK
 
+def get_vosk_version():
+    """Version du paquet vosk réellement installé (utile pour diagnostiquer
+    un souci de reconnaissance/chargement de modèle propre à une version
+    précise). Lue via les métadonnées du paquet plutôt qu'un attribut
+    __version__ (le module vosk n'en expose pas) ; "inconnue" en repli si
+    ces métadonnées sont absentes (ex. non embarquées par PyInstaller)."""
+    try:
+        return importlib.metadata.version("vosk")
+    except Exception:
+        return "inconnue"
+
 # --------------------------------------------------------------------------
 # Moteur vocal : Piper (synthèse neuronale locale)
 # --------------------------------------------------------------------------
@@ -2113,6 +2124,7 @@ class Api:
             "listenHotkeyAvailable": self._hotkey_module_available(),
             "kbLayout": self.kb_layout,
             "appVersion": get_app_version(),
+            "voskVersion": get_vosk_version(),
             "profiles": list_profiles(),
             "activeProfile": _active_profile_id,
             "profileCycleHotkey": self.profile_cycle_hotkey,
@@ -5805,7 +5817,18 @@ class Api:
     def _listen_loop(self, model_path):
         try:
             vosk.SetLogLevel(-1)
+            # Chronométré et loggé (voir aussi get_vosk_version) : sert à
+            # diagnostiquer un chargement anormalement lent (ex. build
+            # PyInstaller très supérieur à l'exécution en Python direct),
+            # en distinguant le temps de chargement du modèle lui-même du
+            # reste de l'initialisation.
+            _model_load_start = time.time()
             model = vosk.Model(model_path)
+            self._log(
+                f"Modèle vocal (Vosk {get_vosk_version()}) chargé en "
+                f"{time.time() - _model_load_start:.1f}s.",
+                "info",
+            )
             recognizer = vosk.KaldiRecognizer(model, SAMPLE_RATE)
             # Demande à Vosk ses N meilleures hypothèses au lieu d'une
             # seule : un mot mal transcrit dans la meilleure hypothèse
