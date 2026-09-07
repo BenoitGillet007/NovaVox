@@ -103,9 +103,8 @@ async function init() {
       const looksLikeVersion = /^\d/.test(data.appVersion);
       document.getElementById("versionBtn").textContent = looksLikeVersion ? `v${data.appVersion}` : data.appVersion;
     }
-    if (data.voskVersion) {
-      document.getElementById("versionBtn").title = `Voir les notes de mise à jour · Moteur vocal Vosk ${data.voskVersion}`;
-    }
+    state.voskVersion = data.voskVersion || null;
+    updateVersionTooltip(data.modelInfo);
     state.profiles = data.profiles || [];
     state.activeProfile = data.activeProfile || null;
     state.profileCycleHotkey = data.profileCycleHotkey || null;
@@ -997,9 +996,26 @@ function closePatchNotes() {
 
 /* ------------------------------------------------------------ Modèle */
 
+// Combine la version du moteur Vosk (identique partout) et le modèle
+// chargé (nom + taille sur le disque, très variable d'une installation
+// à l'autre — voir get_model_folder_info côté Python) dans l'infobulle
+// du numéro de version, pour qu'on distingue les deux d'un coup d'œil
+// sans confondre "quelle version du logiciel" et "quel modèle".
+function updateVersionTooltip(modelInfo) {
+  const parts = [];
+  if (state.voskVersion) parts.push(`Moteur vocal Vosk ${state.voskVersion}`);
+  if (modelInfo && modelInfo.name) parts.push(`Modèle : ${modelInfo.name} (${modelInfo.sizeLabel})`);
+  const suffix = parts.length ? ` · ${parts.join(" · ")}` : "";
+  document.getElementById("versionBtn").title = `Voir les notes de mise à jour${suffix}`;
+}
+
 async function browseModel() {
   const path = await window.pywebview.api.browse_model();
-  if (path) document.getElementById("modelPath").value = path;
+  if (path) {
+    document.getElementById("modelPath").value = path;
+    const modelInfo = await window.pywebview.api.get_model_info(path);
+    updateVersionTooltip(modelInfo);
+  }
 }
 
 async function onResetApp() {
@@ -1605,10 +1621,12 @@ function voskDownloadProgress(percent, message) {
 }
 
 // Appelé par Python une fois le téléchargement terminé (succès ou échec)
-function voskDownloadDone(success, pathOrError) {
+async function voskDownloadDone(success, pathOrError) {
   if (success) {
     document.getElementById("modelPath").value = pathOrError;
     appendLog(`Modèle vocal installé : ${pathOrError}`, "success");
+    const modelInfo = await window.pywebview.api.get_model_info(pathOrError);
+    updateVersionTooltip(modelInfo);
     closeModelSetup();
   } else {
     showModelSetupError(
