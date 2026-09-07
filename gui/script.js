@@ -541,6 +541,7 @@ function renderCommands() {
         ` : ""}
         <div class="command-actions">
           ${moveButtonsHtml(idx)}
+          <button class="icon-btn-sm" title="Écouter la phrase" data-action="speak">▶️</button>
           <button class="icon-btn-sm" title="Ajouter un synonyme" data-action="add-syn">+ syn</button>
           <button class="icon-btn-sm" title="Modifier la phrase / la touche" data-action="edit">✏️</button>
           <button class="icon-btn-sm danger" title="Supprimer" data-action="delete">✕</button>
@@ -671,6 +672,11 @@ async function onCardAction(e) {
     if (updated && updated.trim() && updated.trim().toLowerCase() !== current) {
       state.commands = await window.pywebview.api.edit_synonym(idx, synIdx, updated.trim());
       renderCommands();
+    }
+  } else if (action === "speak") {
+    const result = await window.pywebview.api.speak_command_phrase(idx);
+    if (result && result.ok === false && result.error) {
+      alert(result.error);
     }
   } else if (action === "edit") {
     state.editingIndex = idx;
