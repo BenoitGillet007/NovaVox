@@ -276,21 +276,28 @@ RE_OOC_LOCATION = re.compile(
 )
 
 
-def _humanize_destination(raw_id):
+def _humanize_destination(raw_id, user_aliases=None):
     """Rend un identifiant de destination un peu plus prononçable à voix
     haute.
 
     Étape 0 (systématique) — retire tout préfixe/occurrence de
     "ObjectContainer", jamais prononcé (voir RE_OBJECT_CONTAINER_PREFIX).
 
-    Priorité 1 — alias connu (voir KNOWN_LOCATION_ALIASES), ex.
+    Priorité 1 — alias PERSONNALISÉ par l'utilisateur (voir user_aliases,
+    réglages "Alias de destinations" dans l'appli, table éditable
+    équivalente à KNOWN_LOCATION_ALIASES mais remplie par l'utilisateur
+    lui-même plutôt que codée en dur ici) : passe toujours devant l'alias
+    codé en dur, pour permettre de corriger/personnaliser n'importe quel
+    identifiant sans modifier ce fichier.
+
+    Priorité 2 — alias connu (voir KNOWN_LOCATION_ALIASES), ex.
     'rs_ext_cru-leo1' -> 'Seraphim Station'.
 
-    Priorité 2 — format "OOC_<Système>_<index>_<Corps>" (planètes/lunes,
+    Priorité 3 — format "OOC_<Système>_<index>_<Corps>" (planètes/lunes,
     voir RE_OOC_LOCATION) : donne "<Corps> (système <Système>)", ex.
     'OOC_Stanton_1d_Ita' -> 'Ita (système Stanton)'.
 
-    Priorité 3 — repli générique pour les autres formats rencontrés
+    Priorité 4 — repli générique pour les autres formats rencontrés
     (points de minage, balises de mission...) : 'MISSION_QT_Quantum_
     Beacon_732699457697' -> 'Quantum Beacon' ; 'ab_mine_stanton1_med_008'
     -> 'ab mine stanton1 med 008'. Le nom complet est conservé (aucune
@@ -303,8 +310,14 @@ def _humanize_destination(raw_id):
         return raw_id
 
     without_oc = RE_OBJECT_CONTAINER_PREFIX.sub("", raw_id).strip("_ ")
+    normalized = _normalize_for_alias_lookup(without_oc)
 
-    alias = KNOWN_LOCATION_ALIASES.get(_normalize_for_alias_lookup(without_oc))
+    if user_aliases:
+        custom = user_aliases.get(normalized)
+        if custom:
+            return custom
+
+    alias = KNOWN_LOCATION_ALIASES.get(normalized)
     if alias:
         return alias
 
@@ -315,6 +328,33 @@ def _humanize_destination(raw_id):
     cleaned = re.sub(r"_\d{6,}$", "", without_oc)  # retire le suffixe d'instance
     cleaned = re.sub(r"^MISSION_QT_", "", cleaned)
     return cleaned.replace("_", " ").strip()
+
+
+def destination_alias_key(raw_id, user_aliases=None):
+    """Renvoie la clé normalisée d'un identifiant de destination brut
+    SEULEMENT si aucun nom lisible n'est déjà disponible pour lui (ni
+    alias utilisateur, ni KNOWN_LOCATION_ALIASES, ni format OOC_...
+    reconnu) — càd quand _humanize_destination(raw_id) retomberait sur le
+    repli générique (ex. 'rs_entry_nyx_pyro_jp1' -> 'rs entry nyx pyro
+    jp1'). Renvoie None sinon.
+
+    Sert à repérer automatiquement ce genre d'identifiant "brut" pour le
+    proposer dans les réglages ("Alias de destinations"), prêt à être
+    renommé par l'utilisateur, sans polluer la liste avec les
+    identifiants déjà bien résolus (ex. OOC_Stanton_1d_Ita)."""
+    if not raw_id:
+        return None
+    without_oc = RE_OBJECT_CONTAINER_PREFIX.sub("", raw_id).strip("_ ")
+    if not without_oc:
+        return None
+    normalized = _normalize_for_alias_lookup(without_oc)
+    if user_aliases and user_aliases.get(normalized):
+        return None
+    if normalized in KNOWN_LOCATION_ALIASES:
+        return None
+    if RE_OOC_LOCATION.match(without_oc):
+        return None
+    return normalized
 
 
 # Station orbitale principale connue par planète (Stanton), reprise du
@@ -330,7 +370,7 @@ STATION_BY_PLANET = {
 }
 
 
-def _resolve_destination_label(raw_destination, obstruction_label=None):
+def _resolve_destination_label(raw_destination, obstruction_label=None, user_aliases=None):
     """Détermine le meilleur nom à annoncer pour une destination, en
     donnant la priorité au texte lisible capturé via une ligne
     "Found obsruction while routing from X to Y" (voir
@@ -348,8 +388,11 @@ def _resolve_destination_label(raw_destination, obstruction_label=None):
     - Si obstruction_label est fourni mais ne correspond à aucune planète
       connue : c'est déjà un nom de lieu lisible (ex. "Base minière
       #ODD-E9B"), utilisé tel quel.
-    - Sinon, repli sur _humanize_destination(raw_destination) comme
-      avant."""
+    - Sinon, repli sur _humanize_destination(raw_destination, user_aliases)
+      comme avant — user_aliases (voir destination_alias_key) permet à
+      l'utilisateur de personnaliser depuis les réglages le nom annoncé
+      pour un identifiant brut précis, ex. 'rs_entry_nyx_pyro_jp1' ->
+      'Pyro Gateway'."""
     if obstruction_label:
         label = obstruction_label.strip()
         planet_key = re.sub(r"\s+", "", label).lower()
@@ -357,7 +400,7 @@ def _resolve_destination_label(raw_destination, obstruction_label=None):
         if station:
             return station
         return label
-    return _humanize_destination(raw_destination)
+    return _humanize_destination(raw_destination, user_aliases=user_aliases)
 
 
 # --------------------------------------------------------------------------

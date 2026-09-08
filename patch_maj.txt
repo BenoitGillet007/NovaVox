@@ -1,5 +1,9 @@
 NOVAVOX — Notes de mise à jour
 ==============================
+v0.2.4
+------
+- Nouvelle option dans les entrées du Game.log (🛰 Game.log > Entrées) pour personnaliser le nom annoncé lors de l'arrivée à une destination dont l'identifiant technique n'est pas déjà reconnu (ex. « rs_entry_nyx_pyro_jp1 »). Ces identifiants bruts sont désormais ajoutés automatiquement à la liste dès leur première détection, prêts à être renommés (ex. en « Pyro Gateway »).
+
 v0.2.3
 ------
 - Correction d'un processus NovaVox qui pouvait rester actif en arrière-plan après avoir quitté l'application, obligeant à le tuer manuellement dans le Gestionnaire des tâches avant de pouvoir installer une mise à jour.

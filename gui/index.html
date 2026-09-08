@@ -155,6 +155,30 @@
             <button class="btn btn-ghost btn-sm" id="gameLogHudOverrideAddBtn" type="button">Ajouter</button>
           </div>
         </div>
+
+        <div class="ai-context-section" style="margin-top: 12px;">
+          <div class="ai-context-header">
+            <label>🛰 Alias de destinations</label>
+          </div>
+          <p class="ai-setting-desc" style="margin: -4px 0 8px;">
+            Quand une destination détectée dans le Game.log ne correspond à aucun nom déjà
+            connu (ex. <em>« rs_entry_nyx_pyro_jp1 »</em>, la station Pyro Gateway sur Nyx),
+            elle est ajoutée automatiquement ci-dessous dès sa première détection — inutile
+            de la copier-coller toi-même. Renseigne le nom à annoncer à la place dans le
+            champ correspondant, ou ajoutes-en un manuellement ci-dessous si tu connais déjà
+            l'identifiant brut avant qu'il n'apparaisse en jeu.
+          </p>
+          <div id="gameLogDestinationAliasesList" class="game-log-overrides-list"></div>
+          <div class="input-group game-log-override-add" style="margin-top: 8px;">
+            <input type="text" id="gameLogDestinationAliasRawInput"
+                   placeholder="Identifiant brut détecté (ex. rs_entry_nyx_pyro_jp1)"
+                   autocomplete="off" />
+            <input type="text" id="gameLogDestinationAliasNameInput"
+                   placeholder="Nom à annoncer à la place (ex. Pyro Gateway)"
+                   autocomplete="off" />
+            <button class="btn btn-ghost btn-sm" id="gameLogDestinationAliasAddBtn" type="button">Ajouter</button>
+          </div>
+        </div>
       </div>
     </div>
 
