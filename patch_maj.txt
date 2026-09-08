@@ -5,6 +5,7 @@ v0.2.4
 - Correction de l'installateur de mise à jour : comme NovaVox reste actif en arrière-plan (icône barre des tâches) quand on ferme sa fenêtre, l'installateur pouvait afficher une erreur « n'a pas pu arrêter toutes les applications automatiquement » au lieu de le fermer proprement lui-même avant de mettre à jour les fichiers.
 - Démarrage de l'écoute nettement plus rapide en cas d'arrêt/relance répétés : le modèle vocal Vosk n'est désormais rechargé qu'une seule fois (jusqu'à ~20s selon les machines) tant que le dossier du modèle ne change pas, au lieu d'être rechargé depuis zéro à chaque activation.
 - Correction de l'icône dans la barre des tâches (systray) de la version installée : elle affichait un repli générique au lieu du vrai logo NovaVox, faute d'un fichier icon.ico manquant à côté de l'exécutable compilé.
+- Annonce des points de saut du Game.log avec leur vrai nom (ex. « Stanton Gateway », « Pyro Gateway », « Nyx Gateway », « Magnus Gateway », « Terra Gateway », « Castra Gateway ») au lieu de l'identifiant technique brut (ex. « rs_ext_pyro-stan_jp1 »).
 v0.2.3
 ------
 - Correction d'un processus NovaVox qui pouvait rester actif en arrière-plan après avoir quitté l'application, obligeant à le tuer manuellement dans le Gestionnaire des tâches avant de pouvoir installer une mise à jour.
