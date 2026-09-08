@@ -436,6 +436,13 @@ def _resolve_destination_label(raw_destination, obstruction_label=None, user_ali
     technique générique (typiquement "RestStop", qui ne dit rien du lieu
     réel une fois isolé).
 
+    - Priorité ABSOLUE : un alias PERSONNALISÉ (voir user_aliases) défini
+      pour raw_destination lui-même. Vérifié en tout premier, AVANT même
+      obstruction_label : la plupart des trajets réels croisent un
+      obstacle en route (une planète sur le chemin), ce qui donnait la
+      main à obstruction_label et empêchait alors l'alias utilisateur de
+      jamais s'appliquer à la destination réellement sélectionnée — voir
+      destination_alias_key pour la détection de ce cas.
     - Si obstruction_label est fourni ET correspond au nom d'une planète
       connue (voir STATION_BY_PLANET) : renvoie le nom de sa station
       principale plutôt que le nom de la planète elle-même — cohérent
@@ -449,6 +456,12 @@ def _resolve_destination_label(raw_destination, obstruction_label=None, user_ali
       l'utilisateur de personnaliser depuis les réglages le nom annoncé
       pour un identifiant brut précis, ex. 'rs_entry_nyx_pyro_jp1' ->
       'Pyro Gateway'."""
+    if user_aliases and raw_destination:
+        without_oc = RE_OBJECT_CONTAINER_PREFIX.sub("", raw_destination).strip("_ ")
+        custom = user_aliases.get(_normalize_for_alias_lookup(without_oc))
+        if custom:
+            return custom
+
     if obstruction_label:
         label = obstruction_label.strip()
         planet_key = re.sub(r"\s+", "", label).lower()

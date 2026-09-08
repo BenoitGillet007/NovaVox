@@ -4437,17 +4437,20 @@ class Api:
         self._persist_ai_config()
         return {"ok": True, "aliases": self.game_log_destination_aliases}
 
-    def _maybe_register_destination_alias(self, raw_id, obstruction_label):
-        """Si l'identifiant brut détecté n'a pas de nom lisible déjà connu
-        (voir destination_alias_key) ET qu'aucun label d'obstruction n'a
-        été fourni par le moteur (auquel cas l'alias ne serait de toute
-        façon jamais utilisé — voir _resolve_destination_label), l'ajoute
-        automatiquement à game_log_destination_aliases avec une valeur
-        vide, pour qu'il apparaisse dans les réglages prêt à être renommé
-        sans que l'utilisateur ait à le copier-coller lui-même depuis le
-        journal."""
-        if obstruction_label:
-            return
+    def _maybe_register_destination_alias(self, raw_id):
+        """Si l'identifiant brut de la destination SÉLECTIONNÉE (raw_id)
+        n'a pas de nom lisible déjà connu (voir destination_alias_key),
+        l'ajoute automatiquement à game_log_destination_aliases avec une
+        valeur vide, pour qu'il apparaisse dans les réglages prêt à être
+        renommé sans que l'utilisateur ait à le copier-coller lui-même
+        depuis le journal.
+
+        Vérifié même quand obstruction_label est fourni (donc même quand
+        ce n'est PAS lui qui sera annoncé cette fois — voir
+        _resolve_destination_label) : la plupart des trajets réels
+        croisent un obstacle en route, et un alias personnalisé pour
+        raw_id doit malgré tout pouvoir être proposé/utilisé, puisqu'il
+        prend maintenant le pas sur obstruction_label une fois défini."""
         key = destination_alias_key(raw_id, self.game_log_destination_aliases)
         if not key or key in self.game_log_destination_aliases:
             return
@@ -4484,14 +4487,14 @@ class Api:
             dest = _resolve_destination_label(raw_dest, obstruction_label, self.game_log_destination_aliases)
             key = "route_set" if dest else "route_set_no_dest"
             text = self._format_game_log_phrase(key, dest=dest)
-            self._maybe_register_destination_alias(raw_dest, obstruction_label)
+            self._maybe_register_destination_alias(raw_dest)
         elif etype == "jump_start":
             raw_dest = evt.get("destination")
             obstruction_label = evt.get("obstruction_label")
             dest = _resolve_destination_label(raw_dest, obstruction_label, self.game_log_destination_aliases)
             key = "jump_start" if dest else "jump_start_no_dest"
             text = self._format_game_log_phrase(key, dest=dest)
-            self._maybe_register_destination_alias(raw_dest, obstruction_label)
+            self._maybe_register_destination_alias(raw_dest)
         elif etype == "zone_change":
             raw_zone = evt.get("zone")
             obstruction_label = evt.get("obstruction_label")
@@ -4500,7 +4503,7 @@ class Api:
             text = self._format_game_log_phrase(key, zone=zone)
             if zone:
                 self._overlay_set_zone(zone)
-            self._maybe_register_destination_alias(raw_zone, obstruction_label)
+            self._maybe_register_destination_alias(raw_zone)
         elif etype == "hud_notification":
             raw_text = _clean_hud_notification_text(evt.get("text", ""))
             if not raw_text:
