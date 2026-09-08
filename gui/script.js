@@ -2942,16 +2942,16 @@ async function onAddGameLogDestinationAlias() {
 }
 
 // Appelé par Python (voir _maybe_register_destination_alias dans app.py)
-// dès qu'un identifiant de destination brut JAMAIS VU auparavant, et non
-// résolu automatiquement, est détecté dans le Game.log : l'ajoute
-// immédiatement à la liste des alias (valeur vide au départ, donc aucun
-// changement de comportement tant qu'il n'est pas personnalisé), visible
-// dès la prochaine ouverture des réglages sans que l'utilisateur ait à le
-// copier-coller lui-même. Si les réglages sont déjà ouverts, la liste se
-// met à jour en direct.
-function gameLogDestinationAliasAdded(rawKey) {
+// dès qu'un identifiant de destination brut JAMAIS VU auparavant est
+// détecté dans le Game.log — reconnu automatiquement ou non : l'ajoute
+// immédiatement à la liste des alias, préremplie avec le nom ACTUELLEMENT
+// annoncé (aucun changement de comportement tant qu'elle n'est pas
+// modifiée), visible dès la prochaine ouverture des réglages sans que
+// l'utilisateur ait à la copier-coller lui-même. Si les réglages sont déjà
+// ouverts, la liste se met à jour en direct.
+function gameLogDestinationAliasAdded(rawKey, initialName) {
   if (Object.prototype.hasOwnProperty.call(state.gameLogDestinationAliases, rawKey)) return;
-  state.gameLogDestinationAliases[rawKey] = "";
+  state.gameLogDestinationAliases[rawKey] = initialName || "";
   if (document.getElementById("gameLogDestinationAliasesList")) {
     renderGameLogDestinationAliases(state.gameLogDestinationAliases);
   }

@@ -4437,26 +4437,31 @@ class Api:
         self._persist_ai_config()
         return {"ok": True, "aliases": self.game_log_destination_aliases}
 
-    def _maybe_register_destination_alias(self, raw_id):
-        """Si l'identifiant brut de la destination SÉLECTIONNÉE (raw_id)
-        n'a pas de nom lisible déjà connu (voir destination_alias_key),
-        l'ajoute automatiquement à game_log_destination_aliases avec une
-        valeur vide, pour qu'il apparaisse dans les réglages prêt à être
-        renommé sans que l'utilisateur ait à le copier-coller lui-même
-        depuis le journal.
+    def _maybe_register_destination_alias(self, raw_id, current_name):
+        """Ajoute automatiquement l'identifiant brut de CHAQUE destination
+        rencontrée (raw_id) à game_log_destination_aliases dès sa première
+        détection — reconnue par un mécanisme automatique (alias codé en
+        dur, point de saut, planète OOC_..., station via obstruction_label)
+        OU non — pour que l'utilisateur puisse choisir/personnaliser le nom
+        annoncé pour absolument toutes ses destinations depuis les
+        réglages, pas seulement celles qui ne sont pas déjà reconnues.
 
-        Vérifié même quand obstruction_label est fourni (donc même quand
-        ce n'est PAS lui qui sera annoncé cette fois — voir
-        _resolve_destination_label) : la plupart des trajets réels
-        croisent un obstacle en route, et un alias personnalisé pour
-        raw_id doit malgré tout pouvoir être proposé/utilisé, puisqu'il
-        prend maintenant le pas sur obstruction_label une fois défini."""
+        current_name (déjà calculé par _resolve_destination_label, quelle
+        que soit sa source) sert de valeur de départ : aucun changement de
+        comportement tant que l'entrée n'est pas éditée, puisque c'est
+        déjà exactement le nom en train d'être annoncé.
+
+        Ne touche jamais une entrée déjà présente (voir
+        destination_alias_key) : ni pour l'écraser si l'utilisateur l'a
+        déjà personnalisée, ni pour la re-préremplir sinon — une seule
+        fois à la première rencontre suffit."""
         key = destination_alias_key(raw_id, self.game_log_destination_aliases)
         if not key or key in self.game_log_destination_aliases:
             return
-        self.game_log_destination_aliases[key] = ""
+        value = (current_name or "").strip()
+        self.game_log_destination_aliases[key] = value
         self._persist_ai_config()
-        self._push(f"gameLogDestinationAliasAdded({json.dumps(key)})")
+        self._push(f"gameLogDestinationAliasAdded({json.dumps(key)}, {json.dumps(value)})")
 
     def _on_game_event(self, evt):
         """Callback appelé depuis le thread du GameLogWatcher à chaque
@@ -4487,14 +4492,14 @@ class Api:
             dest = _resolve_destination_label(raw_dest, obstruction_label, self.game_log_destination_aliases)
             key = "route_set" if dest else "route_set_no_dest"
             text = self._format_game_log_phrase(key, dest=dest)
-            self._maybe_register_destination_alias(raw_dest)
+            self._maybe_register_destination_alias(raw_dest, dest)
         elif etype == "jump_start":
             raw_dest = evt.get("destination")
             obstruction_label = evt.get("obstruction_label")
             dest = _resolve_destination_label(raw_dest, obstruction_label, self.game_log_destination_aliases)
             key = "jump_start" if dest else "jump_start_no_dest"
             text = self._format_game_log_phrase(key, dest=dest)
-            self._maybe_register_destination_alias(raw_dest)
+            self._maybe_register_destination_alias(raw_dest, dest)
         elif etype == "zone_change":
             raw_zone = evt.get("zone")
             obstruction_label = evt.get("obstruction_label")
@@ -4503,7 +4508,7 @@ class Api:
             text = self._format_game_log_phrase(key, zone=zone)
             if zone:
                 self._overlay_set_zone(zone)
-            self._maybe_register_destination_alias(raw_zone)
+            self._maybe_register_destination_alias(raw_zone, zone)
         elif etype == "hud_notification":
             raw_text = _clean_hud_notification_text(evt.get("text", ""))
             if not raw_text:
