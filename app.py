@@ -41,6 +41,7 @@ from game_log_watcher import (
     game_state_to_prompt_block,
     _resolve_destination_label,
     destination_alias_key,
+    _obstruction_label_is_generic_guess,
 )
 
 
@@ -396,7 +397,7 @@ def _load_update_manifest_url():
 UPDATE_MANIFEST_URL = _load_update_manifest_url()
 # Repli utilisé uniquement si patch_maj.txt est absent ou ne contient
 # aucune ligne "vX.Y.Z" reconnaissable (voir get_app_version ci-dessous).
-APP_VERSION_FALLBACK = "0.2.6"
+APP_VERSION_FALLBACK = "0.2.7"
 MODEL_DIR_DEFAULT = os.path.join(BASE_DIR, "model")
 GUI_INDEX = os.path.join(RESOURCE_DIR, "gui", "index.html")
 # Fenêtre séparée, superposée à Star Citizen — PAS une injection dans le
@@ -4437,7 +4438,7 @@ class Api:
         self._persist_ai_config()
         return {"ok": True, "aliases": self.game_log_destination_aliases}
 
-    def _maybe_register_destination_alias(self, raw_id, current_name):
+    def _maybe_register_destination_alias(self, raw_id, current_name, obstruction_label):
         """Ajoute automatiquement l'identifiant brut de CHAQUE destination
         rencontrée (raw_id) à game_log_destination_aliases dès sa première
         détection — reconnue par un mécanisme automatique (alias codé en
@@ -4451,10 +4452,22 @@ class Api:
         comportement tant que l'entrée n'est pas éditée, puisque c'est
         déjà exactement le nom en train d'être annoncé.
 
+        N'ENREGISTRE RIEN si obstruction_label est déjà un nom de lieu
+        SPÉCIFIQUE (voir _obstruction_label_is_generic_guess) : dans ce
+        cas, _resolve_destination_label ignore volontairement tout alias
+        rattaché à raw_id (qui peut être un identifiant générique PARTAGÉ
+        par plusieurs lieux réels différents — ex. 'ObjectContainer_
+        RestStop' pour Baijini Point/Everus Harbor/Port Tressler à la
+        fois) — proposer un alias ici serait donc trompeur : l'éditer
+        n'aurait aucun effet sur les futurs trajets vers un AUTRE lieu
+        partageant le même identifiant brut.
+
         Ne touche jamais une entrée déjà présente (voir
         destination_alias_key) : ni pour l'écraser si l'utilisateur l'a
         déjà personnalisée, ni pour la re-préremplir sinon — une seule
         fois à la première rencontre suffit."""
+        if obstruction_label and not _obstruction_label_is_generic_guess(obstruction_label):
+            return
         key = destination_alias_key(raw_id, self.game_log_destination_aliases)
         if not key or key in self.game_log_destination_aliases:
             return
@@ -4492,14 +4505,14 @@ class Api:
             dest = _resolve_destination_label(raw_dest, obstruction_label, self.game_log_destination_aliases)
             key = "route_set" if dest else "route_set_no_dest"
             text = self._format_game_log_phrase(key, dest=dest)
-            self._maybe_register_destination_alias(raw_dest, dest)
+            self._maybe_register_destination_alias(raw_dest, dest, obstruction_label)
         elif etype == "jump_start":
             raw_dest = evt.get("destination")
             obstruction_label = evt.get("obstruction_label")
             dest = _resolve_destination_label(raw_dest, obstruction_label, self.game_log_destination_aliases)
             key = "jump_start" if dest else "jump_start_no_dest"
             text = self._format_game_log_phrase(key, dest=dest)
-            self._maybe_register_destination_alias(raw_dest, dest)
+            self._maybe_register_destination_alias(raw_dest, dest, obstruction_label)
         elif etype == "zone_change":
             raw_zone = evt.get("zone")
             obstruction_label = evt.get("obstruction_label")
@@ -4508,7 +4521,7 @@ class Api:
             text = self._format_game_log_phrase(key, zone=zone)
             if zone:
                 self._overlay_set_zone(zone)
-            self._maybe_register_destination_alias(raw_zone, zone)
+            self._maybe_register_destination_alias(raw_zone, zone, obstruction_label)
         elif etype == "hud_notification":
             raw_text = _clean_hud_notification_text(evt.get("text", ""))
             if not raw_text:
