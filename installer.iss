@@ -48,6 +48,12 @@ AppVersion={#MyAppVersion}
 AppPublisher={#MyAppPublisher}
 DefaultDirName={localappdata}\{#MyAppName}
 DefaultGroupName={#MyAppName}
+; Affiche explicitement la page "Sélectionner le dossier de destination"
+; du wizard (comportement par défaut d'Inno Setup, mais rendu explicite
+; ici plutôt que de compter dessus) : sans cette page, NovaVox
+; s'installait toujours dans DefaultDirName sans que l'utilisateur
+; puisse choisir un autre emplacement.
+DisableDirPage=no
 DisableProgramGroupPage=yes
 OutputDir=Output
 OutputBaseFilename=NovaVox_Setup
