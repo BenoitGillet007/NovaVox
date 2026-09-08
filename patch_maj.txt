@@ -1,5 +1,9 @@
 NOVAVOX — Notes de mise à jour
 ==============================
+v0.2.8
+------
+- Ajoute Lorville, Area18, Orison et les antennes de communication de chaque planète de Stanton (Hurston, Crusader, ArcCorp, microTech) à la liste des lieux reconnus par défaut.
+
 v0.2.7
 ------
 - Correction d'une confusion entre les 3 stations "Rest & Refinery" principales de Stanton (Baijini Point, Everus Harbor, Port Tressler) : elles partagent le même identifiant technique brut, donc un alias personnalisé enregistré pour l'une pouvait à tort s'appliquer aux deux autres lors de trajets suivants. Le nom précis révélé par le jeu au moment du trajet est désormais toujours prioritaire dans ce cas.
