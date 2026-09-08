@@ -271,14 +271,37 @@ KNOWN_LOCATION_ALIASES = {
     # ici en repli direct plutôt que d'élargir la regex à l'aveugle.
     "loc rs ext stan terra jp1": "Terra Gateway",
     "loc rs ext stan magnus jp1": "Nyx Gateway",
+    "loc rs ext stan pyro jp1": "Pyro Gateway",
 
     # Système Stanton, autres identifiants de zone/station vérifiés :
-    "ooc stanton": "Stanton",
+    "ooc stanton": "l'étoile Stanton",
     "ooc stanton2 l3": "CRU L3",
     "ab collector gas stanton1": "Wikelo's Emporium - Dasi Station",
     "ab collector gas stanton4": "Wikelo's Emporium - Kinga Station",
     "ab mine stanton3 med 005": "Base minière DYV-JKE",
     "rs ext arc l001": "Lively Pathway Station",
+
+    # Système Stanton — planètes et lunes, en repli direct pour un nom
+    # court et naturel à l'oral (préféré par un utilisateur à la forme
+    # "<Corps> (système Stanton)" produite automatiquement par
+    # RE_OOC_LOCATION, redondante ici puisque le système ne change jamais
+    # entre deux corps de Stanton dans une même annonce) :
+    "ooc stanton 1 hurston": "Hurston",
+    "ooc stanton 1a ariel": "Ariel",
+    "ooc stanton 1b aberdeen": "Aberdeen",
+    "ooc stanton 1c magda": "Magda",
+    "ooc stanton 1d ita": "Ita",
+    "ooc stanton 2 crusader": "Crusader",
+    "ooc stanton 2a cellin": "Cellin",
+    "ooc stanton 2b daymar": "Daymar",
+    "ooc stanton 2c yela": "Yela",
+    "ooc stanton 3 arccorp": "ArcCorp",
+    "ooc stanton 3a lyria": "Lyria",
+    "ooc stanton 3b wala": "Wala",
+    "ooc stanton 4 microtech": "microTech",
+    "ooc stanton 4a calliope": "Calliope",
+    "ooc stanton 4b clio": "Clio",
+    "ooc stanton 4c euterpe": "Euterpe",
 
     # Système Pyro — étoile et planètes (noms officiels vérifiés en jeu) :
     "pyrostar": "l'étoile Pyro",
