@@ -41,6 +41,7 @@ from game_log_watcher import (
     game_state_to_prompt_block,
     _resolve_destination_label,
     destination_alias_key,
+    destination_is_unresolved,
     _obstruction_label_is_generic_guess,
 )
 
@@ -397,7 +398,7 @@ def _load_update_manifest_url():
 UPDATE_MANIFEST_URL = _load_update_manifest_url()
 # Repli utilisé uniquement si patch_maj.txt est absent ou ne contient
 # aucune ligne "vX.Y.Z" reconnaissable (voir get_app_version ci-dessous).
-APP_VERSION_FALLBACK = "0.2.8"
+APP_VERSION_FALLBACK = "0.2.4"
 MODEL_DIR_DEFAULT = os.path.join(BASE_DIR, "model")
 GUI_INDEX = os.path.join(RESOURCE_DIR, "gui", "index.html")
 # Fenêtre séparée, superposée à Star Citizen — PAS une injection dans le
@@ -4465,12 +4466,26 @@ class Api:
         Ne touche jamais une entrée déjà présente (voir
         destination_alias_key) : ni pour l'écraser si l'utilisateur l'a
         déjà personnalisée, ni pour la re-préremplir sinon — une seule
-        fois à la première rencontre suffit."""
+        fois à la première rencontre suffit.
+
+        Signale aussi dans le journal système (voir
+        destination_is_unresolved) les identifiants VRAIMENT non reconnus
+        par aucun mécanisme automatique — ex. si Star Citizen change ou
+        ajoute un identifiant depuis la dernière mise à jour de NovaVox —
+        pour que ça se voie sans avoir à ouvrir les réglages soi-même.
+        Silencieux pour les destinations déjà bien résolues (planètes,
+        points de saut connus...), pas besoin d'alerter dans ce cas."""
         if obstruction_label and not _obstruction_label_is_generic_guess(obstruction_label):
             return
         key = destination_alias_key(raw_id, self.game_log_destination_aliases)
         if not key or key in self.game_log_destination_aliases:
             return
+        if destination_is_unresolved(raw_id, self.game_log_destination_aliases):
+            self._log(
+                f"🛰 Nouvelle destination non reconnue dans le Game.log ({key}) — "
+                "ajoutée à Réglages > Game.log > Alias de destinations, prête à être renommée.",
+                "info",
+            )
         value = (current_name or "").strip()
         self.game_log_destination_aliases[key] = value
         self._persist_ai_config()
