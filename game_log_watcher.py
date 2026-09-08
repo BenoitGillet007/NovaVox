@@ -246,6 +246,83 @@ KNOWN_LOCATION_ALIASES = {
     # Vraie orthographe observée en jeu : "cru-leo1" (pas "cru-l1" comme
     # deviné initialement) — corrigé d'après un vrai message de log.
     "rs ext cru leo1": "Seraphim Station",
+
+    # Stations "Rest & Refinery" (points de Lagrange de Stanton, un par
+    # planète L1-L5) — noms vérifiés en jeu, ajoutés par un utilisateur au
+    # fil de ses trajets réels (voir set_game_log_destination_alias).
+    # S1 = Hurston, S2 = Crusader, S3 = ArcCorp, S4 = microTech.
+    "loc rr s1 l1": "Green Glade Station",
+    "loc rr s1 l2": "Faithful Dream Station",
+    "loc rr s1 l3": "Thundering Express Station",
+    "loc rr s1 l4": "Melodic Fields Station",
+    "loc rr s1 l5": "High Course Station",
+    "loc rr s2 l5": "Beautiful Glen Station",
+    "loc rr s3 l1": "Wide Forest Station",
+    "loc rr s3 l3": "Modern Express Station",
+    "loc rr s3 l4": "Faint Glen Station",
+    "loc rr s4 l1": "Shallow Frontier Station",
+    "loc rr s4 l2": "Long Forest Station",
+    "loc rr s4 l4": "Crossroads Station",
+    "loc rr s4 l5": "Modern Icarus Station",
+
+    # Points de saut (voir aussi RE_JUMP_POINT_ID/SYSTEM_NAMES) dont
+    # l'identifiant brut réel porte un préfixe "Loc_" non couvert par
+    # cette regex (elle attend "rs_..." en tout début de chaîne) — ajoutés
+    # ici en repli direct plutôt que d'élargir la regex à l'aveugle.
+    "loc rs ext stan terra jp1": "Terra Gateway",
+    "loc rs ext stan magnus jp1": "Nyx Gateway",
+
+    # Système Stanton, autres identifiants de zone/station vérifiés :
+    "ooc stanton": "Stanton",
+    "ooc stanton2 l3": "CRU L3",
+    "ab collector gas stanton1": "Wikelo's Emporium - Dasi Station",
+    "ab collector gas stanton4": "Wikelo's Emporium - Kinga Station",
+    "ab mine stanton3 med 005": "Base minière DYV-JKE",
+    "rs ext arc l001": "Lively Pathway Station",
+
+    # Système Pyro — étoile et planètes (noms officiels vérifiés en jeu) :
+    "pyrostar": "l'étoile Pyro",
+    "pyro1": "Pyro I",
+    "pyro2": "Monox",
+    "pyro3": "Bloom",
+    "pyro5": "Pyro V",
+    "pyro5b": "Vatra",
+    "pyro5c": "Adir",
+    "pyro5e": "Fuego",
+    "pyro5f": "Vuur",
+    "pyro6": "Terminus",
+
+    # Système Pyro — stations et points de Lagrange :
+    "rs ext pyro2 l4": "Checkmate",
+    "rs ext pyro3 l1": "Station-service Starlight",
+    "rs ext pyro3 l3": "Patch City",
+    "rs ext pyro5 l4": "Rod's Fuel 'N Supplies",
+    "rs ext pyro5 l5": "Rat's Nest",
+    "p5 l3": "Pyro 5 L3",
+    "rs ext pyro6 l3": "Endgame",
+    "rs ext pyro6 l4": "Nyx Gateway",
+    "rs ext pyro6 l5": "Megumi Ravitaillement",
+
+    # Système Pyro — champ d'astéroïdes Keeger (stations/points de service
+    # de la People's Alliance) :
+    "social 001 keeger segment rckcrk 095": "Qv Breaker Station",
+    "social 001 keeger segment rckcrk 101": "Qv Breaker Station",
+    "social 001 keeger segment rckcrk 102": "Qv Breaker Station",
+    "social 001 keeger segment rckcrk 105": "Qv Breaker Station",
+    "social 001 keeger segment rckcrk 112": "Qv Breaker Station",
+    "rs asmbl keeger 01": "Station-service Alpha de l'Alliance du Peuple",
+    "rs asmbl keeger 02": "Station-service Delta de l'Alliance du Peuple",
+    "rs asmbl keeger 03": "Station-service Theta de l'Alliance du Peuple",
+    "rs asmbl keeger 04": "Station-service Lambda de l'Alliance du Peuple",
+
+    # Système Pyro — anneau Glaciem :
+    "glaciemring transitpoint alpha": "point de transit Glaciem Alpha",
+    "glaciemring transitpoint bravo": "point de transit Glaciem Bravo",
+    "glaciemring transitpoint charlie": "point de transit Glaciem Charlie",
+
+    # Système Nyx :
+    "nyxstar": "l'étoile Nyx",
+    "levski all 001": "Levski",
 }
 
 
@@ -436,6 +513,13 @@ def _resolve_destination_label(raw_destination, obstruction_label=None, user_ali
     technique générique (typiquement "RestStop", qui ne dit rien du lieu
     réel une fois isolé).
 
+    - Priorité ABSOLUE : un alias PERSONNALISÉ (voir user_aliases) défini
+      pour raw_destination lui-même. Vérifié en tout premier, AVANT même
+      obstruction_label : la plupart des trajets réels croisent un
+      obstacle en route (une planète sur le chemin), ce qui donnait la
+      main à obstruction_label et empêchait alors l'alias utilisateur de
+      jamais s'appliquer à la destination réellement sélectionnée — voir
+      destination_alias_key pour la détection de ce cas.
     - Si obstruction_label est fourni ET correspond au nom d'une planète
       connue (voir STATION_BY_PLANET) : renvoie le nom de sa station
       principale plutôt que le nom de la planète elle-même — cohérent
@@ -449,6 +533,12 @@ def _resolve_destination_label(raw_destination, obstruction_label=None, user_ali
       l'utilisateur de personnaliser depuis les réglages le nom annoncé
       pour un identifiant brut précis, ex. 'rs_entry_nyx_pyro_jp1' ->
       'Pyro Gateway'."""
+    if user_aliases and raw_destination:
+        without_oc = RE_OBJECT_CONTAINER_PREFIX.sub("", raw_destination).strip("_ ")
+        custom = user_aliases.get(_normalize_for_alias_lookup(without_oc))
+        if custom:
+            return custom
+
     if obstruction_label:
         label = obstruction_label.strip()
         planet_key = re.sub(r"\s+", "", label).lower()
