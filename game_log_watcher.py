@@ -257,6 +257,38 @@ def _normalize_for_alias_lookup(raw_id):
     return re.sub(r"\s+", " ", s).strip()
 
 
+# Noms complets des systèmes stellaires, utilisés pour transformer les
+# identifiants de points de saut (voir RE_JUMP_POINT_ID) en nom de la
+# station "Gateway" côté système d'arrivée. Codes vérifiés dans un vrai
+# Game.log (ex. "rs_ext_pyro-stan_jp1", "rs_comm_nyx_pyro_jp1",
+# "rs_comm_stan-magnus_jp1", "rs_comm_nyx_castra_jp1"...).
+SYSTEM_NAMES = {
+    "arc": "ArcCorp",
+    "cru": "Crusader",
+    "hur": "Hurston",
+    "mic": "microTech",
+    "pyro": "Pyro",
+    "stan": "Stanton",
+    "nyx": "Nyx",
+    "magnus": "Magnus",
+    "terra": "Terra",
+    "castra": "Castra",
+}
+
+# Identifiant de point de saut, ex. "rs_ext_pyro-stan_jp1",
+# "rs_entry_pyro-nyx_jp", "rs_comm_nyx_pyro_jp1", "rs_clinic_pyro-stan_jp1".
+# Le séparateur entre les deux codes système est tantôt un tiret, tantôt un
+# underscore selon les identifiants réellement observés — les deux sont
+# donc acceptés. Le nom du DEUXIÈME système (celui vers lequel mène le
+# point de saut) est celui annoncé, ex. "pyro-stan" -> "Stanton Gateway",
+# "nyx_pyro" -> "Pyro Gateway" : c'est le nom officiel de la station
+# donnant accès au système en question, cohérent avec le principe déjà
+# utilisé pour les stations orbitales (voir STATION_BY_PLANET plus bas).
+RE_JUMP_POINT_ID = re.compile(
+    r"^rs[_-][a-z]+[_-](?P<sys1>[a-z]+)[_-](?P<sys2>[a-z]+)[_-]jp\d*$"
+)
+
+
 # Format "OOC_<Système>_<index planète><lettre lune optionnelle>_<Corps>",
 # vérifié dans un vrai Game.log (section PHYSICS INSTANCE STATS) :
 #   OOC_Stanton_1_Hurston      -> système Stanton, planète 1 (Hurston)
@@ -293,11 +325,14 @@ def _humanize_destination(raw_id, user_aliases=None):
     Priorité 2 — alias connu (voir KNOWN_LOCATION_ALIASES), ex.
     'rs_ext_cru-leo1' -> 'Seraphim Station'.
 
-    Priorité 3 — format "OOC_<Système>_<index>_<Corps>" (planètes/lunes,
+    Priorité 3 — point de saut (voir RE_JUMP_POINT_ID), ex.
+    'rs_ext_pyro-stan_jp1' -> 'Stanton Gateway'.
+
+    Priorité 4 — format "OOC_<Système>_<index>_<Corps>" (planètes/lunes,
     voir RE_OOC_LOCATION) : donne "<Corps> (système <Système>)", ex.
     'OOC_Stanton_1d_Ita' -> 'Ita (système Stanton)'.
 
-    Priorité 4 — repli générique pour les autres formats rencontrés
+    Priorité 5 — repli générique pour les autres formats rencontrés
     (points de minage, balises de mission...) : 'MISSION_QT_Quantum_
     Beacon_732699457697' -> 'Quantum Beacon' ; 'ab_mine_stanton1_med_008'
     -> 'ab mine stanton1 med 008'. Le nom complet est conservé (aucune
@@ -321,6 +356,18 @@ def _humanize_destination(raw_id, user_aliases=None):
     if alias:
         return alias
 
+    m = RE_JUMP_POINT_ID.match(without_oc.lower())
+    if m:
+        system_name = SYSTEM_NAMES.get(m.group("sys2"))
+        if system_name:
+            return f"{system_name} Gateway"
+        # La structure "rs_..._jp..." est bien celle d'un point de saut,
+        # mais le code système (ex. un nouveau système ajouté par CIG,
+        # absent de SYSTEM_NAMES) n'est pas reconnu : mieux vaut annoncer
+        # une valeur explicitement neutre que de prononcer l'identifiant
+        # technique brut ou de risquer d'annoncer un système erroné.
+        return "Endroit inconnu"
+
     m = RE_OOC_LOCATION.match(without_oc)
     if m:
         return f"{m.group('body')} (système {m.group('system')})"
@@ -333,15 +380,19 @@ def _humanize_destination(raw_id, user_aliases=None):
 def destination_alias_key(raw_id, user_aliases=None):
     """Renvoie la clé normalisée d'un identifiant de destination brut
     SEULEMENT si aucun nom lisible n'est déjà disponible pour lui (ni
-    alias utilisateur, ni KNOWN_LOCATION_ALIASES, ni format OOC_...
-    reconnu) — càd quand _humanize_destination(raw_id) retomberait sur le
-    repli générique (ex. 'rs_entry_nyx_pyro_jp1' -> 'rs entry nyx pyro
-    jp1'). Renvoie None sinon.
+    alias utilisateur, ni KNOWN_LOCATION_ALIASES, ni point de saut reconnu
+    — voir RE_JUMP_POINT_ID/SYSTEM_NAMES, ni format OOC_... reconnu) —
+    càd quand _humanize_destination(raw_id) retomberait sur le repli
+    générique OU sur "Endroit inconnu" (point de saut vers un système pas
+    encore répertorié dans SYSTEM_NAMES : le nom générique ne dit rien du
+    lieu réel, autant laisser l'utilisateur le personnaliser). Renvoie
+    None sinon.
 
     Sert à repérer automatiquement ce genre d'identifiant "brut" pour le
     proposer dans les réglages ("Alias de destinations"), prêt à être
     renommé par l'utilisateur, sans polluer la liste avec les
-    identifiants déjà bien résolus (ex. OOC_Stanton_1d_Ita)."""
+    identifiants déjà bien résolus (ex. OOC_Stanton_1d_Ita,
+    rs_ext_pyro-stan_jp1 -> "Stanton Gateway")."""
     if not raw_id:
         return None
     without_oc = RE_OBJECT_CONTAINER_PREFIX.sub("", raw_id).strip("_ ")
@@ -352,6 +403,11 @@ def destination_alias_key(raw_id, user_aliases=None):
         return None
     if normalized in KNOWN_LOCATION_ALIASES:
         return None
+    m = RE_JUMP_POINT_ID.match(without_oc.lower())
+    if m:
+        if m.group("sys2") in SYSTEM_NAMES:
+            return None
+        return normalized
     if RE_OOC_LOCATION.match(without_oc):
         return None
     return normalized

@@ -440,6 +440,17 @@ def get_app_version():
         pass
     return APP_VERSION_FALLBACK
 
+def get_vosk_version():
+    """Version du paquet vosk réellement installé (utile pour diagnostiquer
+    un souci de reconnaissance/chargement de modèle propre à une version
+    précise). Lue via les métadonnées du paquet plutôt qu'un attribut
+    __version__ (le module vosk n'en expose pas) ; "inconnue" en repli si
+    ces métadonnées sont absentes (ex. non embarquées par PyInstaller)."""
+    try:
+        return importlib.metadata.version("vosk")
+    except Exception:
+        return "inconnue"
+
 # --------------------------------------------------------------------------
 # Moteur vocal : Piper (synthèse neuronale locale)
 # --------------------------------------------------------------------------
@@ -759,6 +770,20 @@ KEYEVENTF_SCANCODE = 0x0008
 KEYEVENTF_KEYUP = 0x0002
 ISO102_SCAN_CODE = 0x56  # DIK_OEM_102 : touche "< > \" à gauche de Z/W en AZERTY
 
+# Touches numériques du pavé numérique (num0-num9) : leur code de balayage
+# est bien défini dans pydirectinput.KEYBOARD_MAPPING... mais en commentaire
+# (jamais activé), contrairement à numlock/divide/multiply/subtract/add/
+# decimal qui, eux, fonctionnent. Résultat : pydirectinput.keyDown("num1")
+# ne lève aucune exception (le nom de touche est juste absent du
+# dictionnaire, donc keyDown() retourne silencieusement sans rien envoyer)
+# — la commande apparaît "déclenchée" dans le journal alors qu'aucune
+# touche n'atteint le jeu. Mêmes codes que le dictionnaire de pydirectinput,
+# envoyés nous-mêmes via SendInput comme pour ISO102_SCAN_CODE ci-dessus.
+NUMPAD_DIGIT_SCAN_CODES = {
+    "num0": 0x52, "num1": 0x4F, "num2": 0x50, "num3": 0x51, "num4": 0x4B,
+    "num5": 0x4C, "num6": 0x4D, "num7": 0x47, "num8": 0x48, "num9": 0x49,
+}
+
 PUL = ctypes.POINTER(ctypes.c_ulong)
 
 
@@ -913,6 +938,28 @@ def model_folder_is_valid(path):
     if not path or not os.path.isdir(path):
         return False
     return os.path.isdir(os.path.join(path, "am")) and os.path.isdir(os.path.join(path, "conf"))
+
+
+def get_model_folder_info(path):
+    """Nom et taille sur le disque du dossier de modèle Vosk sélectionné —
+    affichés à côté de la version de Vosk (voir get_vosk_version) pour
+    qu'on distingue d'un coup d'œil LE MOTEUR utilisé (identique partout)
+    DU MODÈLE chargé (peut varier énormément en taille/temps de
+    chargement d'une installation à l'autre : "petit" ~41 Mo contre
+    "précis" ~1,4 Go, voir VOSK_MODELS). None si le dossier est absent ou
+    invalide."""
+    if not model_folder_is_valid(path):
+        return None
+    total_bytes = 0
+    for root, _dirs, files in os.walk(path):
+        for name in files:
+            try:
+                total_bytes += os.path.getsize(os.path.join(root, name))
+            except OSError:
+                pass
+    size_mo = total_bytes / (1024 * 1024)
+    size_label = f"{size_mo / 1024:.2f} Go" if size_mo >= 1024 else f"{size_mo:.1f} Mo"
+    return {"name": os.path.basename(os.path.normpath(path)), "sizeLabel": size_label}
 
 
 def _normalize_commands(items):
@@ -1840,6 +1887,17 @@ class Api:
         else:
             self.commands = load_commands()
         self.model_path = MODEL_DIR_DEFAULT
+        # Cache du modèle Vosk déjà chargé (voir _listen_loop) : recharger
+        # vosk.Model(model_path) à chaque démarrage d'écoute est coûteux
+        # (jusqu'à ~20s observés dans le build compilé, contre ~0.2s en
+        # exécution Python directe — vraisemblablement un antivirus qui
+        # scrute chaque lecture disque de l'exe compilé) alors que rien ne
+        # change entre deux activations tant que le dossier du modèle
+        # reste le même. On ne recharge donc que si le chemin a changé
+        # (nouveau modèle sélectionné) plutôt qu'à chaque clic sur
+        # "Écouter".
+        self._vosk_model = None
+        self._vosk_model_path = None
         self.listening = False
         self.stop_event = threading.Event()
         self.last_trigger = {}
@@ -2123,6 +2181,8 @@ class Api:
             "listenHotkeyAvailable": self._hotkey_module_available(),
             "kbLayout": self.kb_layout,
             "appVersion": get_app_version(),
+            "voskVersion": get_vosk_version(),
+            "modelInfo": get_model_folder_info(self.model_path),
             "profiles": list_profiles(),
             "activeProfile": _active_profile_id,
             "profileCycleHotkey": self.profile_cycle_hotkey,
@@ -2555,6 +2615,21 @@ class Api:
             pass
         return self.commands
 
+    def speak_command_phrase(self, index):
+        """Prononce à voix haute la phrase d'une commande (bouton ▶ du
+        panneau), via Piper, pour permettre de vérifier comment elle sera
+        entendue une fois reconnue."""
+        try:
+            cmd = self.commands[int(index)]
+        except (IndexError, ValueError, TypeError):
+            return {"ok": False, "error": "Commande introuvable."}
+        if cmd.get("type") == "title":
+            return {"ok": False, "error": "Pas de voix pour un titre."}
+        if not self.piper_voice:
+            return {"ok": False, "error": "Aucune voix Piper sélectionnée (voir Réglages > Moteur vocal)."}
+        self._speak(cmd["phrase"])
+        return {"ok": True}
+
     # ------------------------------------------- Export/Import config --
 
     # Fichiers de configuration inclus dans export_config/import_config
@@ -2755,6 +2830,15 @@ class Api:
             return None
         self.model_path = path
         return self.model_path
+
+    def get_model_info(self, path=None):
+        """Nom/taille du dossier de modèle Vosk à afficher à côté de la
+        version de Vosk (voir get_model_folder_info) — appelé par le JS
+        après un changement de dossier (Parcourir / téléchargement d'un
+        nouveau modèle) pour rafraîchir l'infobulle sans redemander tout
+        l'état de l'appli. Sans argument, utilise le dossier actuellement
+        retenu (self.model_path)."""
+        return get_model_folder_info(path or self.model_path)
 
     # ------------------------------------------------- Réinitialisation --
 
@@ -5852,7 +5936,31 @@ class Api:
     def _listen_loop(self, model_path):
         try:
             vosk.SetLogLevel(-1)
-            model = vosk.Model(model_path)
+            # Réutilise le modèle déjà chargé tant que le dossier
+            # sélectionné n'a pas changé (voir self._vosk_model dans
+            # __init__) : recharger vosk.Model(model_path) à chaque
+            # activation de l'écoute est coûteux (jusqu'à ~20s observés
+            # dans le build compilé, contre ~0.2s en exécution Python
+            # directe pour EXACTEMENT le même modèle) alors que rien ne
+            # change entre deux activations successives.
+            if self._vosk_model is not None and self._vosk_model_path == model_path:
+                model = self._vosk_model
+                self._log(f"Modèle vocal (Vosk {get_vosk_version()}) réutilisé (déjà chargé).", "info")
+            else:
+                # Chronométré et loggé (voir aussi get_vosk_version) : sert
+                # à diagnostiquer un chargement anormalement lent (ex.
+                # build PyInstaller très supérieur à l'exécution en Python
+                # direct), en distinguant le temps de chargement du modèle
+                # lui-même du reste de l'initialisation.
+                _model_load_start = time.time()
+                model = vosk.Model(model_path)
+                self._log(
+                    f"Modèle vocal (Vosk {get_vosk_version()}) chargé en "
+                    f"{time.time() - _model_load_start:.1f}s.",
+                    "info",
+                )
+                self._vosk_model = model
+                self._vosk_model_path = model_path
             recognizer = vosk.KaldiRecognizer(model, SAMPLE_RATE)
             # Demande à Vosk ses N meilleures hypothèses au lieu d'une
             # seule : un mot mal transcrit dans la meilleure hypothèse
@@ -6179,10 +6287,14 @@ class Api:
             else:
                 keyboard_keys.append(k)
 
-        # La touche ISO 102e ("< > \") est envoyée nous-mêmes via SendInput
-        # (voir _send_raw_scan_code), indépendamment de pydirectinput —
-        # elle ne doit donc pas être bloquée si pydirectinput est absent.
-        needs_pydirectinput = mouse_button is not None or any(k != "iso102" for k in keyboard_keys)
+        # La touche ISO 102e ("< > \") et les chiffres du pavé numérique
+        # (num0-num9, voir NUMPAD_DIGIT_SCAN_CODES) sont envoyés nous-mêmes
+        # via SendInput (voir _send_raw_scan_code), indépendamment de
+        # pydirectinput — ils ne doivent donc pas être bloqués si
+        # pydirectinput est absent.
+        needs_pydirectinput = mouse_button is not None or any(
+            k != "iso102" and k not in NUMPAD_DIGIT_SCAN_CODES for k in keyboard_keys
+        )
         if pydirectinput is None and needs_pydirectinput:
             return
         # GARDE-FOU CRITIQUE : les touches déjà enfoncées (keyDown) DOIVENT
@@ -6199,6 +6311,8 @@ class Api:
             for k in keyboard_keys:
                 if k == "iso102":
                     _send_raw_scan_code(ISO102_SCAN_CODE, key_up=False)
+                elif k in NUMPAD_DIGIT_SCAN_CODES:
+                    _send_raw_scan_code(NUMPAD_DIGIT_SCAN_CODES[k], key_up=False)
                 else:
                     pydirectinput.keyDown(k)
                 pressed_keys.append(k)
@@ -6222,6 +6336,8 @@ class Api:
                 try:
                     if k == "iso102":
                         _send_raw_scan_code(ISO102_SCAN_CODE, key_up=True)
+                    elif k in NUMPAD_DIGIT_SCAN_CODES:
+                        _send_raw_scan_code(NUMPAD_DIGIT_SCAN_CODES[k], key_up=True)
                     else:
                         pydirectinput.keyUp(k)
                 except Exception as e:

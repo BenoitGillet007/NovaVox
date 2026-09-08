@@ -59,6 +59,21 @@ ArchitecturesInstallIn64BitMode=x64compatible
 ; Necessite un clic droit "administrateur" a l'installation, utile
 ; car l'appli elle-meme doit parfois tourner en admin (voir README).
 PrivilegesRequired=lowest
+; NovaVox reste actif en arriere-plan (icone dans la barre des taches)
+; quand on ferme sa fenetre au lieu de vraiment quitter -- comportement
+; volontaire (voir "Icone dans la barre des taches" dans patch_maj.txt).
+; Consequence lors d'une mise a jour : ses fichiers (NovaVox.exe, DLLs)
+; restent verrouilles, et le comportement par defaut d'Inno Setup
+; (CloseApplications=yes) se contente de DEMANDER a l'appli de se
+; fermer via le Restart Manager de Windows -- ce que NovaVox, en tant
+; qu'appli de fond avec fenetre masquee, ne fait visiblement pas
+; toujours correctement, d'ou l'erreur "L'assistant d'installation n'a
+; pas pu arreter toutes les applications automatiquement". "force"
+; demande a Inno Setup de forcer sa fermeture (TerminateProcess) sans
+; jamais bloquer sur ce prompt ; RestartApplications relance ensuite
+; NovaVox automatiquement une fois l'installation terminee.
+CloseApplications=force
+RestartApplications=yes
 
 [Languages]
 Name: "french"; MessagesFile: "compiler:Languages\French.isl"
