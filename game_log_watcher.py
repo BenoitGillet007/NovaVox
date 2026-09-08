@@ -303,6 +303,17 @@ KNOWN_LOCATION_ALIASES = {
     "ooc stanton 4b clio": "Clio",
     "ooc stanton 4c euterpe": "Euterpe",
 
+    # Système Stanton — villes/zones d'atterrissage et antennes de
+    # communication par planète (identifiant sans underscore entre le nom
+    # du système et l'index, contrairement au format des corps célestes) :
+    "lorville city": "Lorville City",
+    "area18 city": "Area18 City",
+    "orison loc": "Orison City",
+    "ooc stanton1 commarray": "Réseau de communications Hurston",
+    "ooc stanton2 commarray": "Antenne de communication Crusader",
+    "ooc stanton3 commarray": "Réseau de communications ArcCorp",
+    "ooc stanton4 commarray": "Réseau de communications microTech",
+
     # Système Pyro — étoile et planètes (noms officiels vérifiés en jeu) :
     "pyrostar": "l'étoile Pyro",
     "pyro1": "Pyro I",
