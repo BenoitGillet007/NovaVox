@@ -348,6 +348,12 @@ def _humanize_destination(raw_id):
         system_name = SYSTEM_NAMES.get(m.group("sys2"))
         if system_name:
             return f"{system_name} Gateway"
+        # La structure "rs_..._jp..." est bien celle d'un point de saut,
+        # mais le code système (ex. un nouveau système ajouté par CIG,
+        # absent de SYSTEM_NAMES) n'est pas reconnu : mieux vaut annoncer
+        # une valeur explicitement neutre que de prononcer l'identifiant
+        # technique brut ou de risquer d'annoncer un système erroné.
+        return "Endroit inconnu"
 
     m = RE_OOC_LOCATION.match(without_oc)
     if m:
