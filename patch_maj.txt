@@ -1,5 +1,13 @@
 NOVAVOX — Notes de mise à jour
 ==============================
+v0.2.7
+------
+- Correction d'une confusion entre les 3 stations "Rest & Refinery" principales de Stanton (Baijini Point, Everus Harbor, Port Tressler) : elles partagent le même identifiant technique brut, donc un alias personnalisé enregistré pour l'une pouvait à tort s'appliquer aux deux autres lors de trajets suivants. Le nom précis révélé par le jeu au moment du trajet est désormais toujours prioritaire dans ce cas.
+
+v0.2.6
+------
+- Complète encore la liste des lieux reconnus par défaut : toutes les planètes/lunes de Stanton (Hurston, Crusader, ArcCorp, microTech, Ariel, Aberdeen, Magda, Ita, Cellin, Daymar, Yela, Lyria, Wala, Calliope, Clio, Euterpe) sont désormais annoncées par leur nom court plutôt qu'avec la mention « (système Stanton) » redondante, plus le point de saut Stanton → Pyro.
+
 v0.2.5
 ------
 - Ajout d'une cinquantaine de lieux vérifiés par la communauté (stations Rest & Refinery de Stanton, planètes/lunes/stations de Pyro, champ d'astéroïdes Keeger, anneau Glaciem, Levski...) à la liste des noms reconnus par défaut, en plus des identifiants déjà couverts automatiquement.

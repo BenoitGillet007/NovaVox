@@ -271,14 +271,37 @@ KNOWN_LOCATION_ALIASES = {
     # ici en repli direct plutôt que d'élargir la regex à l'aveugle.
     "loc rs ext stan terra jp1": "Terra Gateway",
     "loc rs ext stan magnus jp1": "Nyx Gateway",
+    "loc rs ext stan pyro jp1": "Pyro Gateway",
 
     # Système Stanton, autres identifiants de zone/station vérifiés :
-    "ooc stanton": "Stanton",
+    "ooc stanton": "l'étoile Stanton",
     "ooc stanton2 l3": "CRU L3",
     "ab collector gas stanton1": "Wikelo's Emporium - Dasi Station",
     "ab collector gas stanton4": "Wikelo's Emporium - Kinga Station",
     "ab mine stanton3 med 005": "Base minière DYV-JKE",
     "rs ext arc l001": "Lively Pathway Station",
+
+    # Système Stanton — planètes et lunes, en repli direct pour un nom
+    # court et naturel à l'oral (préféré par un utilisateur à la forme
+    # "<Corps> (système Stanton)" produite automatiquement par
+    # RE_OOC_LOCATION, redondante ici puisque le système ne change jamais
+    # entre deux corps de Stanton dans une même annonce) :
+    "ooc stanton 1 hurston": "Hurston",
+    "ooc stanton 1a ariel": "Ariel",
+    "ooc stanton 1b aberdeen": "Aberdeen",
+    "ooc stanton 1c magda": "Magda",
+    "ooc stanton 1d ita": "Ita",
+    "ooc stanton 2 crusader": "Crusader",
+    "ooc stanton 2a cellin": "Cellin",
+    "ooc stanton 2b daymar": "Daymar",
+    "ooc stanton 2c yela": "Yela",
+    "ooc stanton 3 arccorp": "ArcCorp",
+    "ooc stanton 3a lyria": "Lyria",
+    "ooc stanton 3b wala": "Wala",
+    "ooc stanton 4 microtech": "microTech",
+    "ooc stanton 4a calliope": "Calliope",
+    "ooc stanton 4b clio": "Clio",
+    "ooc stanton 4c euterpe": "Euterpe",
 
     # Système Pyro — étoile et planètes (noms officiels vérifiés en jeu) :
     "pyrostar": "l'étoile Pyro",
@@ -494,6 +517,26 @@ STATION_BY_PLANET = {
 }
 
 
+def _obstruction_label_is_generic_guess(obstruction_label):
+    """Renvoie True si obstruction_label se limite au nom BRUT d'une
+    planète connue (voir STATION_BY_PLANET) — un simple repli générique
+    ("ArcCorp" -> "Baijini Point" par défaut), potentiellement inexact
+    pour la destination précise réellement visée (ex. une base minière
+    proche d'ArcCorp, pas Baijini Point elle-même). Renvoie False quand
+    obstruction_label est déjà un nom de lieu SPÉCIFIQUE révélé
+    directement par le moteur du jeu (ex. "Baijini Point", "Everus
+    Harbor", "Port Tressler", "Base minière #ODD-E9B") : cette
+    information est alors fiable telle quelle, PLUS fiable qu'un alias
+    utilisateur rattaché à raw_destination — vérifié en vrai Game.log :
+    'ObjectContainer_RestStop' est l'identifiant brut PARTAGÉ par Baijini
+    Point, Everus Harbor et Port Tressler (aucune info de planète dedans),
+    seul obstruction_label les distingue au moment de chaque trajet."""
+    if not obstruction_label:
+        return False
+    planet_key = re.sub(r"\s+", "", obstruction_label.strip()).lower()
+    return planet_key in STATION_BY_PLANET
+
+
 def _resolve_destination_label(raw_destination, obstruction_label=None, user_aliases=None):
     """Détermine le meilleur nom à annoncer pour une destination, en
     donnant la priorité au texte lisible capturé via une ligne
@@ -504,37 +547,37 @@ def _resolve_destination_label(raw_destination, obstruction_label=None, user_ali
     technique générique (typiquement "RestStop", qui ne dit rien du lieu
     réel une fois isolé).
 
-    - Priorité ABSOLUE : un alias PERSONNALISÉ (voir user_aliases) défini
-      pour raw_destination lui-même. Vérifié en tout premier, AVANT même
-      obstruction_label : la plupart des trajets réels croisent un
-      obstacle en route (une planète sur le chemin), ce qui donnait la
-      main à obstruction_label et empêchait alors l'alias utilisateur de
-      jamais s'appliquer à la destination réellement sélectionnée — voir
-      destination_alias_key pour la détection de ce cas.
-    - Si obstruction_label est fourni ET correspond au nom d'une planète
-      connue (voir STATION_BY_PLANET) : renvoie le nom de sa station
-      principale plutôt que le nom de la planète elle-même — cohérent
-      avec le fait qu'un identifiant "RestStop" désigne une station en
-      orbite, pas la planète en surface.
-    - Si obstruction_label est fourni mais ne correspond à aucune planète
-      connue : c'est déjà un nom de lieu lisible (ex. "Base minière
-      #ODD-E9B"), utilisé tel quel.
-    - Sinon, repli sur _humanize_destination(raw_destination, user_aliases)
-      comme avant — user_aliases (voir destination_alias_key) permet à
-      l'utilisateur de personnaliser depuis les réglages le nom annoncé
-      pour un identifiant brut précis, ex. 'rs_entry_nyx_pyro_jp1' ->
-      'Pyro Gateway'."""
-    if user_aliases and raw_destination:
-        without_oc = RE_OBJECT_CONTAINER_PREFIX.sub("", raw_destination).strip("_ ")
-        custom = user_aliases.get(_normalize_for_alias_lookup(without_oc))
-        if custom:
-            return custom
-
+    - Si obstruction_label est fourni ET correspond au nom BRUT d'une
+      planète connue (voir _obstruction_label_is_generic_guess) : c'est
+      un simple repli générique (nom de la station principale de la
+      planète) — un alias PERSONNALISÉ pour raw_destination (voir
+      user_aliases) a alors le droit de le corriger, puisque ce cas peut
+      être inexact pour la destination précise réellement visée.
+    - Si obstruction_label est fourni et est déjà un nom de lieu
+      SPÉCIFIQUE (ex. "Baijini Point", "Base minière #ODD-E9B") : utilisé
+      tel quel, SANS consulter user_aliases. C'est volontaire —
+      raw_destination peut être un identifiant générique PARTAGÉ par
+      plusieurs lieux réels différents (ex. 'ObjectContainer_RestStop'
+      pour Baijini Point/Everus Harbor/Port Tressler à la fois) : un
+      alias qui lui serait rattaché s'appliquerait alors à tort à tous
+      les lieux partageant ce même identifiant brut, écrasant
+      l'information — fiable, elle — qu'obstruction_label révèle à
+      chaque trajet.
+    - Sinon (pas d'obstruction), repli sur
+      _humanize_destination(raw_destination, user_aliases) comme avant —
+      user_aliases permet à l'utilisateur de personnaliser depuis les
+      réglages le nom annoncé pour un identifiant brut précis, ex.
+      'rs_entry_nyx_pyro_jp1' -> 'Pyro Gateway'."""
     if obstruction_label:
         label = obstruction_label.strip()
         planet_key = re.sub(r"\s+", "", label).lower()
         station = STATION_BY_PLANET.get(planet_key)
         if station:
+            if user_aliases and raw_destination:
+                without_oc = RE_OBJECT_CONTAINER_PREFIX.sub("", raw_destination).strip("_ ")
+                custom = user_aliases.get(_normalize_for_alias_lookup(without_oc))
+                if custom:
+                    return custom
             return station
         return label
     return _humanize_destination(raw_destination, user_aliases=user_aliases)
