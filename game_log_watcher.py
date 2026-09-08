@@ -455,21 +455,21 @@ def _humanize_destination(raw_id, user_aliases=None):
 
 
 def destination_alias_key(raw_id, user_aliases=None):
-    """Renvoie la clé normalisée d'un identifiant de destination brut
-    SEULEMENT si aucun nom lisible n'est déjà disponible pour lui (ni
-    alias utilisateur, ni KNOWN_LOCATION_ALIASES, ni point de saut reconnu
-    — voir RE_JUMP_POINT_ID/SYSTEM_NAMES, ni format OOC_... reconnu) —
-    càd quand _humanize_destination(raw_id) retomberait sur le repli
-    générique OU sur "Endroit inconnu" (point de saut vers un système pas
-    encore répertorié dans SYSTEM_NAMES : le nom générique ne dit rien du
-    lieu réel, autant laisser l'utilisateur le personnaliser). Renvoie
-    None sinon.
+    """Renvoie la clé normalisée d'un identifiant de destination brut,
+    SAUF s'il a déjà un alias personnalisé NON VIDE dans user_aliases
+    (pour ne jamais écraser une personnalisation existante par une
+    nouvelle détection de la même destination). Renvoie None si raw_id
+    est vide ou déjà aliasé.
 
-    Sert à repérer automatiquement ce genre d'identifiant "brut" pour le
-    proposer dans les réglages ("Alias de destinations"), prêt à être
-    renommé par l'utilisateur, sans polluer la liste avec les
-    identifiants déjà bien résolus (ex. OOC_Stanton_1d_Ita,
-    rs_ext_pyro-stan_jp1 -> "Stanton Gateway")."""
+    Contrairement à une version précédente, ceci n'exclut PLUS les
+    identifiants déjà bien résolus automatiquement (KNOWN_LOCATION_ALIASES,
+    point de saut reconnu via RE_JUMP_POINT_ID/SYSTEM_NAMES, format
+    OOC_... via RE_OOC_LOCATION) : l'utilisateur doit pouvoir choisir/
+    personnaliser le nom de CHAQUE destination rencontrée, pas seulement
+    celles qui ne sont pas déjà reconnues — voir
+    _maybe_register_destination_alias côté app.py, qui préremplit la
+    valeur de départ avec le nom actuellement annoncé (donc aucun
+    changement de comportement tant que l'entrée n'est pas éditée)."""
     if not raw_id:
         return None
     without_oc = RE_OBJECT_CONTAINER_PREFIX.sub("", raw_id).strip("_ ")
@@ -477,15 +477,6 @@ def destination_alias_key(raw_id, user_aliases=None):
         return None
     normalized = _normalize_for_alias_lookup(without_oc)
     if user_aliases and user_aliases.get(normalized):
-        return None
-    if normalized in KNOWN_LOCATION_ALIASES:
-        return None
-    m = RE_JUMP_POINT_ID.match(without_oc.lower())
-    if m:
-        if m.group("sys2") in SYSTEM_NAMES:
-            return None
-        return normalized
-    if RE_OOC_LOCATION.match(without_oc):
         return None
     return normalized
 
