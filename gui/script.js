@@ -1,4 +1,4 @@
-const state = { commands: [], listening: false, expandedSynonyms: new Set(), editingIndex: null, listenMode: "always", listenHotkey: null, listenHotkeyAvailable: true, micGateOpen: true, piperVoice: null, profiles: [], activeProfile: null, profileCycleHotkey: null, gameLogHudOverrides: {} };
+const state = { commands: [], listening: false, expandedSynonyms: new Set(), editingIndex: null, listenMode: "always", listenHotkey: null, listenHotkeyAvailable: true, micGateOpen: true, piperVoice: null, profiles: [], activeProfile: null, profileCycleHotkey: null, gameLogHudOverrides: {}, gameLogDestinationAliases: {} };
 let micGateMax = 4000; // repli avant chargement, doit correspondre à MIC_GATE_MAX_RAW côté Python
 
 function ready(fn) {
@@ -263,6 +263,7 @@ function bindEvents() {
   document.getElementById("gameLogAnnounceToggle").addEventListener("change", onGameLogAnnounceToggle);
   document.getElementById("gameLogPlayerHandleSaveBtn").addEventListener("click", onSaveGameLogPlayerHandle);
   document.getElementById("gameLogHudOverrideAddBtn").addEventListener("click", onAddGameLogHudOverride);
+  document.getElementById("gameLogDestinationAliasAddBtn").addEventListener("click", onAddGameLogDestinationAlias);
   document.getElementById("aiContextInput").addEventListener("input", updateContextCount);
   document.getElementById("aiContextSaveBtn").addEventListener("click", saveAiContext);
   document.getElementById("aiModelSelect").addEventListener("change", async (e) => {
@@ -2539,6 +2540,8 @@ async function loadGameLogEntriesPanel() {
     );
     state.gameLogHudOverrides = data.gameLogHudOverrides || {};
     renderGameLogHudOverrides(state.gameLogHudOverrides);
+    state.gameLogDestinationAliases = data.gameLogDestinationAliases || {};
+    renderGameLogDestinationAliases(state.gameLogDestinationAliases);
   } catch (e) {
     // entrées Game.log non disponibles, ignore
   }
@@ -2830,6 +2833,127 @@ function gameLogHudOverrideAdded(original, rawText) {
   state.gameLogHudOverrides[original] = rawText;
   if (document.getElementById("gameLogHudOverridesList")) {
     renderGameLogHudOverrides(state.gameLogHudOverrides);
+  }
+}
+
+// Liste des alias personnalisés pour des identifiants de destination bruts
+// non résolus automatiquement (voir set_game_log_destination_alias côté
+// app.py et destination_alias_key côté game_log_watcher.py). Même principe
+// que renderGameLogHudOverrides ci-dessus : la clé est l'identifiant
+// normalisé détecté, la valeur le nom à annoncer à la place.
+function renderGameLogDestinationAliases(aliases) {
+  const container = document.getElementById("gameLogDestinationAliasesList");
+  if (!container) return;
+  container.innerHTML = "";
+
+  const entries = Object.entries(aliases || {});
+  if (entries.length === 0) {
+    const empty = document.createElement("p");
+    empty.className = "ai-setting-desc";
+    empty.textContent = "Aucun alias pour l'instant.";
+    container.appendChild(empty);
+    return;
+  }
+
+  entries.forEach(([rawKey, customName]) => {
+    const row = document.createElement("div");
+    row.className = "game-log-override-row";
+    row.dataset.originalValue = "";
+    row.dataset.savedValue = customName;
+
+    const headerRow = document.createElement("div");
+    headerRow.className = "game-log-row-label-line";
+    const originalEl = document.createElement("div");
+    originalEl.className = "game-log-override-original";
+    originalEl.textContent = `Détecté : « ${rawKey} »`;
+    headerRow.appendChild(originalEl);
+    const statusEl = document.createElement("span");
+    statusEl.className = "game-log-row-status";
+    headerRow.appendChild(statusEl);
+    row.appendChild(headerRow);
+
+    const group = document.createElement("div");
+    group.className = "input-group";
+
+    const input = document.createElement("input");
+    input.type = "text";
+    input.value = customName;
+    input.placeholder = "Nom à annoncer (vide = repli automatique)";
+    input.addEventListener("input", () => updateGameLogRowStatus(row, input, statusEl));
+    group.appendChild(input);
+
+    const saveBtn = document.createElement("button");
+    saveBtn.type = "button";
+    saveBtn.className = "btn btn-ghost btn-sm";
+    saveBtn.textContent = "Enregistrer";
+    saveBtn.addEventListener("click", () => onSaveGameLogDestinationAlias(rawKey, input));
+    group.appendChild(saveBtn);
+
+    const deleteBtn = document.createElement("button");
+    deleteBtn.type = "button";
+    deleteBtn.className = "btn btn-ghost btn-sm danger";
+    deleteBtn.textContent = "Supprimer";
+    deleteBtn.addEventListener("click", () => onDeleteGameLogDestinationAlias(rawKey));
+    group.appendChild(deleteBtn);
+
+    row.appendChild(group);
+    container.appendChild(row);
+    updateGameLogRowStatus(row, input, statusEl);
+  });
+}
+
+async function onSaveGameLogDestinationAlias(rawKey, input) {
+  const res = await window.pywebview.api.set_game_log_destination_alias(rawKey, input.value.trim());
+  if (res && res.ok) {
+    state.gameLogDestinationAliases = res.aliases || {};
+    renderGameLogDestinationAliases(state.gameLogDestinationAliases);
+    appendLog("Alias de destination mis à jour.", "info");
+  }
+}
+
+async function onDeleteGameLogDestinationAlias(rawKey) {
+  const res = await window.pywebview.api.delete_game_log_destination_alias(rawKey);
+  if (res && res.ok) {
+    state.gameLogDestinationAliases = res.aliases || {};
+    renderGameLogDestinationAliases(state.gameLogDestinationAliases);
+    appendLog("Alias de destination supprimé.", "info");
+  }
+}
+
+async function onAddGameLogDestinationAlias() {
+  const rawInput = document.getElementById("gameLogDestinationAliasRawInput");
+  const nameInput = document.getElementById("gameLogDestinationAliasNameInput");
+  const rawKey = rawInput.value.trim();
+  const customName = nameInput.value.trim();
+  if (!rawKey || !customName) {
+    appendLog("Renseigne l'identifiant brut ET le nom à annoncer avant d'ajouter un alias.", "error");
+    return;
+  }
+  const res = await window.pywebview.api.set_game_log_destination_alias(rawKey, customName);
+  if (res && res.ok) {
+    state.gameLogDestinationAliases = res.aliases || {};
+    renderGameLogDestinationAliases(state.gameLogDestinationAliases);
+    rawInput.value = "";
+    nameInput.value = "";
+    appendLog("Alias de destination ajouté.", "info");
+  } else {
+    appendLog("Impossible d'ajouter cet alias.", "error");
+  }
+}
+
+// Appelé par Python (voir _maybe_register_destination_alias dans app.py)
+// dès qu'un identifiant de destination brut JAMAIS VU auparavant, et non
+// résolu automatiquement, est détecté dans le Game.log : l'ajoute
+// immédiatement à la liste des alias (valeur vide au départ, donc aucun
+// changement de comportement tant qu'il n'est pas personnalisé), visible
+// dès la prochaine ouverture des réglages sans que l'utilisateur ait à le
+// copier-coller lui-même. Si les réglages sont déjà ouverts, la liste se
+// met à jour en direct.
+function gameLogDestinationAliasAdded(rawKey) {
+  if (Object.prototype.hasOwnProperty.call(state.gameLogDestinationAliases, rawKey)) return;
+  state.gameLogDestinationAliases[rawKey] = "";
+  if (document.getElementById("gameLogDestinationAliasesList")) {
+    renderGameLogDestinationAliases(state.gameLogDestinationAliases);
   }
 }
 

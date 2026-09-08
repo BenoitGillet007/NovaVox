@@ -7,6 +7,8 @@ v0.2.4
 - Correction de l'icône dans la barre des tâches (systray) de la version installée : elle affichait un repli générique au lieu du vrai logo NovaVox, faute d'un fichier icon.ico manquant à côté de l'exécutable compilé.
 - Annonce des points de saut du Game.log avec leur vrai nom (ex. « Stanton Gateway », « Pyro Gateway », « Nyx Gateway », « Magnus Gateway », « Terra Gateway », « Castra Gateway ») au lieu de l'identifiant technique brut (ex. « rs_ext_pyro-stan_jp1 »).
 - Sécurité pour l'annonce des points de saut : si un futur système ajouté ou renommé par le jeu n'est pas encore reconnu, NovaVox annonce désormais « Endroit inconnu » plutôt que l'identifiant technique brut ou un mauvais nom de système.
+- Nouvelle option dans les entrées du Game.log (🛰 Game.log > Entrées) pour personnaliser le nom annoncé lors de l'arrivée à une destination dont l'identifiant technique n'est pas déjà reconnu (ex. un futur point de saut vers un système pas encore répertorié). Ces identifiants bruts sont désormais ajoutés automatiquement à la liste dès leur première détection, prêts à être renommés.
+
 v0.2.3
 ------
 - Correction d'un processus NovaVox qui pouvait rester actif en arrière-plan après avoir quitté l'application, obligeant à le tuer manuellement dans le Gestionnaire des tâches avant de pouvoir installer une mise à jour.

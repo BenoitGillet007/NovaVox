@@ -36,7 +36,12 @@ import wave
 import zipfile
 from logging.handlers import RotatingFileHandler
 
-from game_log_watcher import GameLogWatcher, game_state_to_prompt_block, _resolve_destination_label
+from game_log_watcher import (
+    GameLogWatcher,
+    game_state_to_prompt_block,
+    _resolve_destination_label,
+    destination_alias_key,
+)
 
 
 def _clean_hud_notification_text(text):
@@ -391,7 +396,7 @@ def _load_update_manifest_url():
 UPDATE_MANIFEST_URL = _load_update_manifest_url()
 # Repli utilisé uniquement si patch_maj.txt est absent ou ne contient
 # aucune ligne "vX.Y.Z" reconnaissable (voir get_app_version ci-dessous).
-APP_VERSION_FALLBACK = "0.2.3"
+APP_VERSION_FALLBACK = "0.2.4"
 MODEL_DIR_DEFAULT = os.path.join(BASE_DIR, "model")
 GUI_INDEX = os.path.join(RESOURCE_DIR, "gui", "index.html")
 # Fenêtre séparée, superposée à Star Citizen — PAS une injection dans le
@@ -1248,6 +1253,7 @@ def load_ai_config():
         "game_log_player_handle": "",
         "game_log_phrases": {},
         "game_log_hud_overrides": {},
+        "game_log_destination_aliases": {},
     }
     if os.path.exists(AI_CONFIG_FILE):
         try:
@@ -1276,6 +1282,8 @@ def load_ai_config():
                 config["game_log_phrases"] = {}
             if not isinstance(config.get("game_log_hud_overrides"), dict):
                 config["game_log_hud_overrides"] = {}
+            if not isinstance(config.get("game_log_destination_aliases"), dict):
+                config["game_log_destination_aliases"] = {}
         except Exception:
             pass
     return config
@@ -1952,6 +1960,22 @@ class Api:
             for k, v in raw_overrides.items()
             if isinstance(raw_overrides, dict) and str(k).strip() and str(v).strip()
         } if isinstance(raw_overrides, dict) else {}
+        # Alias PERSONNALISÉS pour les identifiants de destination bruts
+        # (ex. 'rs_entry_nyx_pyro_jp1') qui ne sont pas déjà résolus
+        # proprement par KNOWN_LOCATION_ALIASES/RE_OOC_LOCATION dans
+        # game_log_watcher.py (voir destination_alias_key) : la clé est
+        # l'identifiant normalisé (espaces/tirets/underscores uniformisés),
+        # la valeur est le nom à annoncer à la place ; une valeur vide
+        # signifie "pas encore personnalisé" (repli sur le nettoyage
+        # générique par défaut), l'entrée reste néanmoins dans la liste —
+        # voir set_game_log_destination_alias()/_maybe_register_destination_
+        # alias() plus bas.
+        raw_dest_aliases = ai_config.get("game_log_destination_aliases") or {}
+        self.game_log_destination_aliases = {
+            str(k).strip(): str(v)
+            for k, v in raw_dest_aliases.items()
+            if isinstance(raw_dest_aliases, dict) and str(k).strip()
+        } if isinstance(raw_dest_aliases, dict) else {}
         self._game_log_watcher = None
         if self.game_log_enabled:
             self._start_game_log_watcher()
@@ -2974,6 +2998,7 @@ class Api:
         self.game_log_player_handle = ""
         self.game_log_phrases = dict(DEFAULT_GAME_LOG_PHRASES)
         self.game_log_hud_overrides = {}
+        self.game_log_destination_aliases = {}
         if self._game_log_watcher:
             self._game_log_watcher.stop()
             self._game_log_watcher = None
@@ -2996,6 +3021,7 @@ class Api:
             "game_log_player_handle": self.game_log_player_handle,
             "game_log_phrases": self.game_log_phrases,
             "game_log_hud_overrides": self.game_log_hud_overrides,
+            "game_log_destination_aliases": self.game_log_destination_aliases,
         })
 
         self.input_device_name = None
@@ -4231,6 +4257,7 @@ class Api:
             "gameLogPhraseDefaults": DEFAULT_GAME_LOG_PHRASES,
             "gameLogPhraseMeta": GAME_LOG_PHRASE_META,
             "gameLogHudOverrides": self.game_log_hud_overrides,
+            "gameLogDestinationAliases": self.game_log_destination_aliases,
         }
 
     def _persist_ai_config(self):
@@ -4251,6 +4278,7 @@ class Api:
             "game_log_player_handle": self.game_log_player_handle,
             "game_log_phrases": self.game_log_phrases,
             "game_log_hud_overrides": self.game_log_hud_overrides,
+            "game_log_destination_aliases": self.game_log_destination_aliases,
         })
 
     # -------------------------------------------- Surveillance du Game.log
@@ -4388,6 +4416,45 @@ class Api:
         self._persist_ai_config()
         return {"ok": True, "overrides": self.game_log_hud_overrides}
 
+    def set_game_log_destination_alias(self, raw_key, custom_name):
+        """Enregistre (ou remplace) le nom personnalisé à annoncer pour un
+        identifiant de destination brut précis (voir destination_alias_key
+        dans game_log_watcher.py, ex. 'rs entry nyx pyro jp1' ->
+        'Pyro Gateway'). Un custom_name vide revient au nettoyage
+        générique par défaut (mais garde l'entrée dans la liste, comme
+        pour set_game_log_hud_override)."""
+        raw_key = (raw_key or "").strip().lower()
+        custom_name = (custom_name or "").strip()
+        if not raw_key:
+            return {"ok": False, "error": "identifiant manquant"}
+        self.game_log_destination_aliases[raw_key] = custom_name
+        self._persist_ai_config()
+        return {"ok": True, "key": raw_key, "aliases": self.game_log_destination_aliases}
+
+    def delete_game_log_destination_alias(self, raw_key):
+        """Supprime un alias de destination personnalisé existant."""
+        self.game_log_destination_aliases.pop((raw_key or "").strip().lower(), None)
+        self._persist_ai_config()
+        return {"ok": True, "aliases": self.game_log_destination_aliases}
+
+    def _maybe_register_destination_alias(self, raw_id, obstruction_label):
+        """Si l'identifiant brut détecté n'a pas de nom lisible déjà connu
+        (voir destination_alias_key) ET qu'aucun label d'obstruction n'a
+        été fourni par le moteur (auquel cas l'alias ne serait de toute
+        façon jamais utilisé — voir _resolve_destination_label), l'ajoute
+        automatiquement à game_log_destination_aliases avec une valeur
+        vide, pour qu'il apparaisse dans les réglages prêt à être renommé
+        sans que l'utilisateur ait à le copier-coller lui-même depuis le
+        journal."""
+        if obstruction_label:
+            return
+        key = destination_alias_key(raw_id, self.game_log_destination_aliases)
+        if not key or key in self.game_log_destination_aliases:
+            return
+        self.game_log_destination_aliases[key] = ""
+        self._persist_ai_config()
+        self._push(f"gameLogDestinationAliasAdded({json.dumps(key)})")
+
     def _on_game_event(self, evt):
         """Callback appelé depuis le thread du GameLogWatcher à chaque
         événement détecté dans le Game.log. Reste volontairement léger et
@@ -4412,19 +4479,28 @@ class Api:
         hud_raw_text = None
 
         if etype == "route_set":
-            dest = _resolve_destination_label(evt.get("destination"), evt.get("obstruction_label"))
+            raw_dest = evt.get("destination")
+            obstruction_label = evt.get("obstruction_label")
+            dest = _resolve_destination_label(raw_dest, obstruction_label, self.game_log_destination_aliases)
             key = "route_set" if dest else "route_set_no_dest"
             text = self._format_game_log_phrase(key, dest=dest)
+            self._maybe_register_destination_alias(raw_dest, obstruction_label)
         elif etype == "jump_start":
-            dest = _resolve_destination_label(evt.get("destination"), evt.get("obstruction_label"))
+            raw_dest = evt.get("destination")
+            obstruction_label = evt.get("obstruction_label")
+            dest = _resolve_destination_label(raw_dest, obstruction_label, self.game_log_destination_aliases)
             key = "jump_start" if dest else "jump_start_no_dest"
             text = self._format_game_log_phrase(key, dest=dest)
+            self._maybe_register_destination_alias(raw_dest, obstruction_label)
         elif etype == "zone_change":
-            zone = _resolve_destination_label(evt.get("zone"), evt.get("obstruction_label"))
+            raw_zone = evt.get("zone")
+            obstruction_label = evt.get("obstruction_label")
+            zone = _resolve_destination_label(raw_zone, obstruction_label, self.game_log_destination_aliases)
             key = "zone_change" if zone else "zone_change_no_zone"
             text = self._format_game_log_phrase(key, zone=zone)
             if zone:
                 self._overlay_set_zone(zone)
+            self._maybe_register_destination_alias(raw_zone, obstruction_label)
         elif etype == "hud_notification":
             raw_text = _clean_hud_notification_text(evt.get("text", ""))
             if not raw_text:
