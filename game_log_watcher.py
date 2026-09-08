@@ -515,6 +515,41 @@ def destination_alias_key(raw_id, user_aliases=None):
     return normalized
 
 
+def destination_is_unresolved(raw_id, user_aliases=None):
+    """Renvoie True si raw_id ne correspond à AUCUN mécanisme de
+    reconnaissance (ni alias utilisateur, ni KNOWN_LOCATION_ALIASES, ni
+    point de saut vers un système connu — voir RE_JUMP_POINT_ID/
+    SYSTEM_NAMES, ni format OOC_... — voir RE_OOC_LOCATION) : càd que
+    _humanize_destination(raw_id) retomberait sur le repli générique OU
+    sur "Endroit inconnu" (point de saut vers un système pas encore
+    répertorié).
+
+    Sert UNIQUEMENT à décider si le journal système doit signaler la
+    découverte (voir _maybe_register_destination_alias côté app.py) —
+    càd un identifiant VRAIMENT nouveau/non reconnu, qui pourrait
+    indiquer que Star Citizen a changé/ajouté un identifiant depuis la
+    dernière fois. Les destinations déjà bien résolues automatiquement
+    (planètes, points de saut connus...) sont quand même ajoutées aux
+    réglages (voir destination_alias_key), mais silencieusement — pas
+    besoin d'alerter l'utilisateur pour celles-là."""
+    if not raw_id:
+        return False
+    without_oc = RE_OBJECT_CONTAINER_PREFIX.sub("", raw_id).strip("_ ")
+    if not without_oc:
+        return False
+    normalized = _normalize_for_alias_lookup(without_oc)
+    if user_aliases and user_aliases.get(normalized):
+        return False
+    if normalized in KNOWN_LOCATION_ALIASES:
+        return False
+    m = RE_JUMP_POINT_ID.match(without_oc.lower())
+    if m:
+        return m.group("sys2") not in SYSTEM_NAMES
+    if RE_OOC_LOCATION.match(without_oc):
+        return False
+    return True
+
+
 # Station orbitale principale connue par planète (Stanton), reprise du
 # lore déjà présent dans le contexte personnalisé de l'IA. Sert à
 # résoudre un identifiant générique (ex. "RestStop") vers un vrai nom
