@@ -96,11 +96,15 @@ RE_TIMESTAMP = re.compile(r"^<([\d\-T:.Z]+)>")
 # précédentes, qui elles contiennent des noms de lieux (ex. "Magda").
 RE_QUANTUM_ARRIVED = re.compile(r"<Quantum Drive Arrived")
 
-# Capture la destination projetée d'un trajet en cours de calcul, ex. :
+# Capture la destination projetée d'un trajet en cours de calcul, AINSI
+# QUE la zone de départ (voir LANDING_ZONE_TO_PLANET plus bas — sert de
+# repli pour deviner la station visée par un identifiant AMBIGU comme
+# "RestStop" quand aucune ligne d'obstruction n'apparaît, cas des trajets
+# locaux trop courts pour en croiser une), ex. :
 # "...CalculateRoute|Projected Start Location is Magda for route to
 #  destination ab_mine_stanton1_med_008 [Team_CGP4][QuantumTravel]"
 RE_ROUTE_PROJECTED = re.compile(
-    r"CalculateRoute\|Projected Start Location is .*? for route to "
+    r"CalculateRoute\|Projected Start Location is (?P<start_location>.+?) for route to "
     r"destination (?P<destination>[A-Za-z0-9_\-]+)"
 )
 
@@ -503,13 +507,21 @@ def destination_alias_key(raw_id, user_aliases=None):
     celles qui ne sont pas déjà reconnues — voir
     _maybe_register_destination_alias côté app.py, qui préremplit la
     valeur de départ avec le nom actuellement annoncé (donc aucun
-    changement de comportement tant que l'entrée n'est pas éditée)."""
+    changement de comportement tant que l'entrée n'est pas éditée).
+
+    Exception : un identifiant AMBIGU PARTAGÉ par plusieurs lieux réels
+    différents (voir AMBIGUOUS_SHARED_DESTINATION_IDS) n'est JAMAIS
+    proposé — un seul alias ne pourrait de toute façon jamais représenter
+    correctement plusieurs lieux différents à la fois (voir
+    _resolve_destination_label, qui le résout via un signal contextuel)."""
     if not raw_id:
         return None
     without_oc = RE_OBJECT_CONTAINER_PREFIX.sub("", raw_id).strip("_ ")
     if not without_oc:
         return None
     normalized = _normalize_for_alias_lookup(without_oc)
+    if normalized in AMBIGUOUS_SHARED_DESTINATION_IDS:
+        return None
     if user_aliases and user_aliases.get(normalized):
         return None
     return normalized
@@ -538,6 +550,11 @@ def destination_is_unresolved(raw_id, user_aliases=None):
     if not without_oc:
         return False
     normalized = _normalize_for_alias_lookup(without_oc)
+    if normalized in AMBIGUOUS_SHARED_DESTINATION_IDS:
+        # Cas connu et déjà géré spécifiquement (voir
+        # AMBIGUOUS_SHARED_DESTINATION_IDS) — pas un signe que Star
+        # Citizen a changé quelque chose, inutile d'alerter.
+        return False
     if user_aliases and user_aliases.get(normalized):
         return False
     if normalized in KNOWN_LOCATION_ALIASES:
@@ -583,7 +600,59 @@ def _obstruction_label_is_generic_guess(obstruction_label):
     return planet_key in STATION_BY_PLANET
 
 
-def _resolve_destination_label(raw_destination, obstruction_label=None, user_aliases=None):
+# Identifiants bruts connus pour être PARTAGÉS par plusieurs lieux réels
+# DIFFÉRENTS — vérifié en vrai Game.log : 'ObjectContainer_RestStop' est
+# strictement identique pour Baijini Point, Everus Harbor et Port
+# Tressler. Un alias (utilisateur OU codé en dur) rattaché à un tel
+# identifiant ne peut donc JAMAIS être fiable : il faudrait qu'il
+# s'applique à plusieurs lieux différents à la fois. Exclus de toute
+# résolution par alias direct (voir _resolve_destination_label) et de
+# l'auto-enregistrement dans les réglages (voir destination_alias_key,
+# destination_is_unresolved) — résolus uniquement via un signal
+# contextuel : obstruction_label si disponible, sinon la zone de départ
+# (voir LANDING_ZONE_TO_PLANET ci-dessous).
+AMBIGUOUS_SHARED_DESTINATION_IDS = {"reststop"}
+
+# Correspondance zone d'atterrissage principale -> planète (Stanton),
+# utilisée pour deviner la station visée par un identifiant AMBIGU (voir
+# AMBIGUOUS_SHARED_DESTINATION_IDS) quand AUCUN obstruction_label n'est
+# disponible — cas vérifié en vrai Game.log des trajets "locaux" trop
+# courts pour croiser un obstacle (la ligne "OnPlayerSelectedQuantum
+# Target" précise elle-même "routing locally" ; fuel estimate proche de
+# zéro sur la ligne "Successfully calculated route"). Dans ce cas, la
+# zone de DÉPART (capturée via RE_ROUTE_PROJECTED, "Projected Start
+# Location is X") reste le seul indice disponible : un saut quantique
+# local reste presque toujours dans le système de la planète de départ.
+LANDING_ZONE_TO_PLANET = {
+    "lorville": "hurston",
+    "area18": "arccorp",
+    "orison": "crusader",
+    "newbabbage": "microtech",
+}
+
+
+def _guess_planet_station_from_start_location(start_location):
+    """Renvoie le nom de la station principale (voir STATION_BY_PLANET)
+    de la planète correspondant à start_location (une zone d'atterrissage
+    connue, voir LANDING_ZONE_TO_PLANET) — ex. 'Lorville' -> 'Everus
+    Harbor'. None si start_location est vide ou ne correspond à aucune
+    zone connue.
+
+    Heuristique, pas une certitude absolue (un trajet local reste
+    PRESQUE toujours dans le système de départ, sans garantie à 100 %) —
+    mais nettement préférable à annoncer l'identifiant brut partagé tel
+    quel (ex. "RestStop"), qui ne dit rien du lieu réel et est identique
+    pour Baijini Point, Everus Harbor et Port Tressler à la fois."""
+    if not start_location:
+        return None
+    key = re.sub(r"\s+", "", start_location.strip()).lower()
+    planet = LANDING_ZONE_TO_PLANET.get(key)
+    if not planet:
+        return None
+    return STATION_BY_PLANET.get(planet)
+
+
+def _resolve_destination_label(raw_destination, obstruction_label=None, user_aliases=None, start_location=None):
     """Détermine le meilleur nom à annoncer pour une destination, en
     donnant la priorité au texte lisible capturé via une ligne
     "Found obsruction while routing from X to Y" (voir
@@ -613,15 +682,33 @@ def _resolve_destination_label(raw_destination, obstruction_label=None, user_ali
       _humanize_destination(raw_destination, user_aliases) comme avant —
       user_aliases permet à l'utilisateur de personnaliser depuis les
       réglages le nom annoncé pour un identifiant brut précis, ex.
-      'rs_entry_nyx_pyro_jp1' -> 'Pyro Gateway'."""
+      'rs_entry_nyx_pyro_jp1' -> 'Pyro Gateway'.
+
+    EXCEPTION : si raw_destination est un identifiant AMBIGU PARTAGÉ par
+    plusieurs lieux réels différents (voir AMBIGUOUS_SHARED_DESTINATION_
+    IDS, ex. "RestStop"), aucun alias direct n'est consulté (ni
+    utilisateur, ni codé en dur) — voir _guess_planet_station_from_
+    start_location pour la résolution par zone de départ utilisée à la
+    place quand obstruction_label est absent."""
+    without_oc = RE_OBJECT_CONTAINER_PREFIX.sub("", raw_destination or "").strip("_ ")
+    normalized = _normalize_for_alias_lookup(without_oc) if without_oc else ""
+
+    if normalized in AMBIGUOUS_SHARED_DESTINATION_IDS:
+        if obstruction_label:
+            label = obstruction_label.strip()
+            planet_key = re.sub(r"\s+", "", label).lower()
+            station = STATION_BY_PLANET.get(planet_key)
+            return station if station else label
+        guessed = _guess_planet_station_from_start_location(start_location)
+        return guessed if guessed else without_oc.replace("_", " ").strip()
+
     if obstruction_label:
         label = obstruction_label.strip()
         planet_key = re.sub(r"\s+", "", label).lower()
         station = STATION_BY_PLANET.get(planet_key)
         if station:
             if user_aliases and raw_destination:
-                without_oc = RE_OBJECT_CONTAINER_PREFIX.sub("", raw_destination).strip("_ ")
-                custom = user_aliases.get(_normalize_for_alias_lookup(without_oc))
+                custom = user_aliases.get(normalized)
                 if custom:
                     return custom
             return station
@@ -796,6 +883,18 @@ class GameLogWatcher(threading.Thread):
         if m:
             self._pending_destination = m.group("destination")
             self._pending_obstruction_label = None
+            self._pending_start_location = None
+            return
+
+        # Zone de DÉPART du trajet en cours de calcul (voir
+        # LANDING_ZONE_TO_PLANET) — repli utilisé pour deviner la station
+        # visée par un identifiant AMBIGU comme "RestStop" quand le trajet
+        # est trop court/local pour croiser un obstacle (voir
+        # RE_ROUTE_OBSTRUCTION juste en dessous, qui n'apparaît alors
+        # jamais). Mémorisé pour le prochain événement à émettre.
+        m = RE_ROUTE_PROJECTED.search(line)
+        if m:
+            self._pending_start_location = m.group("start_location").strip()
             return
 
         # PÉPITE : nom lisible de la vraie destination, révélé par le
@@ -816,8 +915,10 @@ class GameLogWatcher(threading.Thread):
         if m:
             destination = m.group("destination")
             obstruction_label = getattr(self, "_pending_obstruction_label", None)
+            start_location = getattr(self, "_pending_start_location", None)
             self._last_route_destination = destination
             self._last_obstruction_label = obstruction_label
+            self._last_start_location = start_location
 
             signature = (destination, obstruction_label)
             if signature == self._last_route_signature:
@@ -828,27 +929,32 @@ class GameLogWatcher(threading.Thread):
                 "type": "route_set",
                 "destination": destination,
                 "obstruction_label": obstruction_label,
+                "start_location": start_location,
             })
             return
 
         if DEPARTURE_DETECTION_ENABLED and RE_QUANTUM_JUMP_ENGAGED.search(line):
             destination = getattr(self, "_last_route_destination", None)
             obstruction_label = getattr(self, "_last_obstruction_label", None)
+            start_location = getattr(self, "_last_start_location", None)
             self._emit({
                 "type": "jump_start",
                 "destination": destination,
                 "obstruction_label": obstruction_label,
+                "start_location": start_location,
             })
             return
 
         if RE_QUANTUM_ARRIVED.search(line):
             zone = getattr(self, "_last_route_destination", None)
             obstruction_label = getattr(self, "_last_obstruction_label", None)
+            start_location = getattr(self, "_last_start_location", None)
             self._update_state(current_zone=zone, connected=True)
             self._emit({
                 "type": "zone_change",
                 "zone": zone,
                 "obstruction_label": obstruction_label,
+                "start_location": start_location,
             })
             return
 

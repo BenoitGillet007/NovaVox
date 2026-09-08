@@ -4517,21 +4517,30 @@ class Api:
         if etype == "route_set":
             raw_dest = evt.get("destination")
             obstruction_label = evt.get("obstruction_label")
-            dest = _resolve_destination_label(raw_dest, obstruction_label, self.game_log_destination_aliases)
+            start_location = evt.get("start_location")
+            dest = _resolve_destination_label(
+                raw_dest, obstruction_label, self.game_log_destination_aliases, start_location
+            )
             key = "route_set" if dest else "route_set_no_dest"
             text = self._format_game_log_phrase(key, dest=dest)
             self._maybe_register_destination_alias(raw_dest, dest, obstruction_label)
         elif etype == "jump_start":
             raw_dest = evt.get("destination")
             obstruction_label = evt.get("obstruction_label")
-            dest = _resolve_destination_label(raw_dest, obstruction_label, self.game_log_destination_aliases)
+            start_location = evt.get("start_location")
+            dest = _resolve_destination_label(
+                raw_dest, obstruction_label, self.game_log_destination_aliases, start_location
+            )
             key = "jump_start" if dest else "jump_start_no_dest"
             text = self._format_game_log_phrase(key, dest=dest)
             self._maybe_register_destination_alias(raw_dest, dest, obstruction_label)
         elif etype == "zone_change":
             raw_zone = evt.get("zone")
             obstruction_label = evt.get("obstruction_label")
-            zone = _resolve_destination_label(raw_zone, obstruction_label, self.game_log_destination_aliases)
+            start_location = evt.get("start_location")
+            zone = _resolve_destination_label(
+                raw_zone, obstruction_label, self.game_log_destination_aliases, start_location
+            )
             key = "zone_change" if zone else "zone_change_no_zone"
             text = self._format_game_log_phrase(key, zone=zone)
             if zone:
