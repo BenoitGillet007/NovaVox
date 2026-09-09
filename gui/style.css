@@ -731,6 +731,7 @@ body {
 /* ---------- Formulaire d'ajout ---------- */
 .add-form {
   display: flex;
+  flex-wrap: wrap;
   gap: 8px;
   border-top: 1px solid var(--border);
   padding-top: 14px;
@@ -757,6 +758,56 @@ body {
   background: var(--panel);
 }
 .key-field input::placeholder { color: var(--muted); }
+
+/* ---------- Actions supplémentaires (commande enchaînant jusqu'à 5
+   touches à la suite, ex. "approche finale" -> train d'atterrissage PUIS
+   appel du hangar) — voir extra_steps côté app.py. ---------- */
+.extra-steps-field {
+  flex-basis: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.extra-steps-label {
+  font-size: 11.5px;
+  color: var(--muted);
+}
+.extra-steps-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.extra-step-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.extra-step-arrow {
+  flex-shrink: 0;
+  color: var(--accent);
+  font-family: var(--font-mono);
+  font-size: 12px;
+}
+.extra-step-keys {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-weight: 600;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  color: var(--text);
+  padding: 4px 9px;
+  border-radius: 4px;
+}
+.extra-step-delay {
+  width: 64px;
+  background: var(--panel-alt);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--text);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  padding: 4px 6px;
+}
 /* ---------- Modale (fond) ---------- */
 .modal-overlay {
   position: fixed;

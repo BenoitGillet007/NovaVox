@@ -1051,6 +1051,40 @@ def get_model_folder_info(path):
     return {"name": os.path.basename(os.path.normpath(path)), "sizeLabel": size_label}
 
 
+# Nombre maximum d'actions SUPPLÉMENTAIRES qu'une commande peut enchaîner
+# après son action principale (ex. "approche finale" -> touche du train
+# d'atterrissage, PUIS touche d'appel du hangar) — voir _execute_command et
+# _run_command_sequence. Plafonné à 4 : avec l'action principale, ça fait 5
+# actions au total par commande.
+MAX_COMMAND_EXTRA_STEPS = 4
+DEFAULT_EXTRA_STEP_DELAY = 0.3
+
+
+def _normalize_extra_steps(raw_steps):
+    """Valide/nettoie la liste des actions supplémentaires d'une commande
+    (voir MAX_COMMAND_EXTRA_STEPS) : chaque étape est {"keys": str,
+    "delay": float}, "delay" étant le délai (secondes) attendu AVANT
+    d'envoyer cette touche, pour laisser le jeu enregistrer distinctement
+    chaque appui plutôt que d'enchaîner les touches instantanément. Les
+    entrées invalides (pas un dict, "keys" vide) sont ignorées plutôt que
+    de faire planter le chargement."""
+    if not isinstance(raw_steps, list):
+        return []
+    steps = []
+    for raw in raw_steps[:MAX_COMMAND_EXTRA_STEPS]:
+        if not isinstance(raw, dict):
+            continue
+        keys = str(raw.get("keys", "")).strip()
+        if not keys:
+            continue
+        try:
+            delay = max(0.0, min(10.0, float(raw.get("delay", DEFAULT_EXTRA_STEP_DELAY))))
+        except (TypeError, ValueError):
+            delay = DEFAULT_EXTRA_STEP_DELAY
+        steps.append({"keys": keys, "delay": delay})
+    return steps
+
+
 def _normalize_commands(items):
     """Assure la compatibilité ascendante et la cohérence de la liste des
     éléments (commandes ET titres de groupe, mélangés dans une seule liste
@@ -1077,6 +1111,7 @@ def _normalize_commands(items):
                 item["repeat_delay"] = max(0.0, min(10.0, float(item.get("repeat_delay", 0.1))))
             except (TypeError, ValueError):
                 item["repeat_delay"] = 0.1
+            item["extra_steps"] = _normalize_extra_steps(item.get("extra_steps"))
             if "phrase" not in item or "keys" not in item:
                 continue
             normalized.append(item)
@@ -2591,7 +2626,7 @@ class Api:
             self._log("Raccourci de changement de profil désactivé.", "info")
         return {"ok": True, "hotkey": self.profile_cycle_hotkey}
 
-    def add_command(self, phrase, keys, hold=False, repeat_count=1, repeat_delay=0.1):
+    def add_command(self, phrase, keys, hold=False, repeat_count=1, repeat_delay=0.1, extra_steps=None):
         phrase = (phrase or "").strip()
         keys = (keys or "").strip().lower()
         if phrase and keys:
@@ -2606,6 +2641,7 @@ class Api:
             self.commands.append({
                 "type": "command", "phrase": phrase, "keys": keys, "synonyms": [],
                 "hold": bool(hold), "repeat_count": repeat_count, "repeat_delay": repeat_delay,
+                "extra_steps": _normalize_extra_steps(extra_steps),
             })
             save_commands(self.commands)
         return self.commands
@@ -2703,7 +2739,7 @@ class Api:
             save_commands(self.commands)
         return self.commands
 
-    def edit_command(self, index, phrase, keys, hold=None, repeat_count=None, repeat_delay=None):
+    def edit_command(self, index, phrase, keys, hold=None, repeat_count=None, repeat_delay=None, extra_steps=None):
         phrase = (phrase or "").strip()
         keys = (keys or "").strip().lower()
         try:
@@ -2727,6 +2763,8 @@ class Api:
                     cmd["repeat_delay"] = max(0.0, min(10.0, float(repeat_delay)))
                 except (TypeError, ValueError):
                     pass
+            if extra_steps is not None:
+                cmd["extra_steps"] = _normalize_extra_steps(extra_steps)
             save_commands(self.commands)
         return self.commands
 
@@ -6835,10 +6873,11 @@ class Api:
         self._flash(idx)
         repeat_count = max(1, int(cmd.get("repeat_count", 1) or 1))
         repeat_delay = max(0.0, float(cmd.get("repeat_delay", 0.1) or 0.1))
-        if cmd.get("hold", False) or repeat_count > 1:
+        extra_steps = cmd.get("extra_steps") or []
+        if cmd.get("hold", False) or repeat_count > 1 or extra_steps:
             threading.Thread(
-                target=self._press_keys_repeated,
-                args=(cmd["keys"],),
+                target=self._run_command_sequence,
+                args=(cmd["keys"], extra_steps),
                 kwargs={"hold": cmd.get("hold", False), "repeat_count": repeat_count, "repeat_delay": repeat_delay},
                 daemon=True,
             ).start()
@@ -6846,6 +6885,24 @@ class Api:
             self._press_keys(cmd["keys"], hold=False)
         if self.confirm_commands_voice:
             self._speak(cmd["phrase"])
+
+    def _run_command_sequence(self, primary_keys, extra_steps, hold=False, repeat_count=1, repeat_delay=0.1):
+        """Exécute l'action principale d'une commande (avec maintien/
+        répétition éventuels, voir _press_keys_repeated), PUIS chacune de
+        ses actions supplémentaires dans l'ordre (voir extra_steps et
+        MAX_COMMAND_EXTRA_STEPS — jusqu'à 5 actions au total en comptant
+        l'action principale). Chaque action supplémentaire est un simple
+        appui bref (pas de maintien/répétition individuels), précédé du
+        délai configuré pour laisser le jeu enregistrer distinctement
+        chaque touche plutôt que de les enchaîner instantanément. Tourne
+        toujours sur son propre thread (voir _execute_command) pour ne
+        jamais geler la reconnaissance vocale pendant les délais."""
+        self._press_keys_repeated(primary_keys, hold=hold, repeat_count=repeat_count, repeat_delay=repeat_delay)
+        for step in extra_steps:
+            delay = max(0.0, float(step.get("delay", DEFAULT_EXTRA_STEP_DELAY) or DEFAULT_EXTRA_STEP_DELAY))
+            if delay > 0:
+                time.sleep(delay)
+            self._press_keys(step.get("keys", ""), hold=False)
 
     # Boutons souris pouvant être attribués à une commande comme n'importe
     # quelle touche clavier (ex. "ctrl+mouseleft") — voir KB_MOUSE_LAYOUT
