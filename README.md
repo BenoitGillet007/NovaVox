@@ -239,6 +239,13 @@ NovaVox tout seul dès qu'elle détecte le jeu lancé.
 Depuis le menu Démarrer (dossier NovaVox > Désinstaller NovaVox), ou via
 **Paramètres Windows > Applications > NovaVox > Désinstaller**.
 
+## Licence
+
+Ce projet est distribué sous licence [PolyForm Noncommercial 1.0.0](LICENSE) :
+libre de lire, utiliser, modifier et forker à titre non commercial, mais
+**toute utilisation commerciale (vente, intégration dans un produit ou
+service payant...) est interdite** sans autorisation explicite de l'auteur.
+
 ## Credit
 
 Développé par Ammoniak007
