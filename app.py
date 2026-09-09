@@ -6850,6 +6850,16 @@ class Api:
         self._execute_command(idx, via_ai=True, ratio=ratio)
         return True
 
+    @staticmethod
+    def _command_keys_label(cmd):
+        """Représentation textuelle de la succession COMPLÈTE des touches
+        d'une commande (action principale + actions supplémentaires, voir
+        extra_steps) — utilisée dans le journal système et sur l'overlay
+        pour ne jamais n'afficher que la première touche d'une commande
+        qui en enchaîne plusieurs (ex. "n → alt+n")."""
+        parts = [cmd["keys"]] + [step.get("keys", "") for step in (cmd.get("extra_steps") or [])]
+        return " → ".join(p for p in parts if p)
+
     def _execute_command(self, idx, via_ai=False, ratio=1.0):
         cmd = self.commands[idx]
         phrase_norm = cmd["phrase"].lower().strip()
@@ -6859,16 +6869,17 @@ class Api:
             return
 
         self.last_trigger[phrase_norm] = now
+        keys_label = self._command_keys_label(cmd)
         if via_ai:
             self._log(
                 f"  → Commande reconnue via {self.ai_name} (ressemblance {ratio:.0%}) : "
-                f"touche(s) '{cmd['keys']}'",
+                f"touche(s) '{keys_label}'",
                 "success",
             )
         else:
-            self._log(f"  → Action déclenchée : touche(s) '{cmd['keys']}'", "success")
+            self._log(f"  → Action déclenchée : touche(s) '{keys_label}'", "success")
         self._overlay_set_phrase(cmd["phrase"])
-        self._overlay_set_last_command(f"{cmd['phrase']} ({cmd['keys']})")
+        self._overlay_set_last_command(f"{cmd['phrase']} ({keys_label})")
         self._overlay_flash_command()
         self._flash(idx)
         repeat_count = max(1, int(cmd.get("repeat_count", 1) or 1))
