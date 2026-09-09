@@ -251,23 +251,103 @@ OLLAMA_FALLBACK_PATHS = [
 # --------------------------------------------------------------------------
 # Modèle de reconnaissance vocale Vosk (téléchargement automatique)
 # --------------------------------------------------------------------------
-# Liste volontairement courte (2 choix), affichée à l'utilisateur au premier
-# lancement si aucun dossier "model" n'est détecté. URLs vérifiées sur
-# https://alphacephei.com/vosk/models (section French).
+# Deux choix par langue (léger/précis), affichés à l'utilisateur au premier
+# lancement (filtrés selon "ui_language", voir get_state) et depuis Réglages
+# > NovaVox > "Changer de modèle". Identifiants préfixés par langue
+# ("fr-small", "en-large"...) pour rester uniques dans un seul dict plat, y
+# compris pour download_vosk_model qui cherche par id sans connaître la
+# langue courante. URLs vérifiées sur https://alphacephei.com/vosk/models et
+# https://github.com/alphacep/vosk-space/blob/master/models.md.
 VOSK_MODELS = {
-    "small": {
-        "id": "small",
+    "fr-small": {
+        "id": "fr-small",
         "label": "Modèle léger",
         "description": "~41 Mo, rapide à charger, précision correcte. Recommandé pour commencer.",
         "url": "https://alphacephei.com/vosk/models/vosk-model-small-fr-0.22.zip",
     },
-    "large": {
-        "id": "large",
+    "fr-large": {
+        "id": "fr-large",
         "label": "Modèle précis",
         "description": "~1,4 Go, plus long à télécharger et à charger, mais reconnaissance plus fine.",
         "url": "https://alphacephei.com/vosk/models/vosk-model-fr-0.22.zip",
     },
+    "en-small": {
+        "id": "en-small",
+        "label": "Lightweight model",
+        "description": "~40 MB, fast to load, decent accuracy. Recommended to get started.",
+        "url": "https://alphacephei.com/vosk/models/vosk-model-small-en-us-0.15.zip",
+    },
+    "en-large": {
+        "id": "en-large",
+        "label": "Accurate model",
+        "description": "~1.8 GB, longer to download and load, but finer recognition.",
+        "url": "https://alphacephei.com/vosk/models/vosk-model-en-us-0.22.zip",
+    },
+    "nl-small": {
+        "id": "nl-small",
+        "label": "Licht model",
+        "description": "~39 MB, snel te laden, redelijke nauwkeurigheid. Aanbevolen om te beginnen.",
+        "url": "https://alphacephei.com/vosk/models/vosk-model-small-nl-0.22.zip",
+    },
+    "nl-large": {
+        "id": "nl-large",
+        "label": "Nauwkeuriger model",
+        "description": "~860 MB, langer downloaden en laden, maar fijnere herkenning.",
+        "url": "https://alphacephei.com/vosk/models/vosk-model-nl-spraakherkenning-0.6.zip",
+    },
+    "es-small": {
+        "id": "es-small",
+        "label": "Modelo ligero",
+        "description": "~39 MB, carga rápida, precisión correcta. Recomendado para empezar.",
+        "url": "https://alphacephei.com/vosk/models/vosk-model-small-es-0.42.zip",
+    },
+    "es-large": {
+        "id": "es-large",
+        "label": "Modelo preciso",
+        "description": "~1,4 GB, más lento de descargar y cargar, pero reconocimiento más fino.",
+        "url": "https://alphacephei.com/vosk/models/vosk-model-es-0.42.zip",
+    },
+    "it-small": {
+        "id": "it-small",
+        "label": "Modello leggero",
+        "description": "~48 MB, caricamento rapido, precisione corretta. Consigliato per iniziare.",
+        "url": "https://alphacephei.com/vosk/models/vosk-model-small-it-0.22.zip",
+    },
+    "it-large": {
+        "id": "it-large",
+        "label": "Modello preciso",
+        "description": "~1,2 GB, download e caricamento più lunghi, ma riconoscimento più fine.",
+        "url": "https://alphacephei.com/vosk/models/vosk-model-it-0.22.zip",
+    },
+    "de-small": {
+        "id": "de-small",
+        "label": "Leichtes Modell",
+        "description": "~45 MB, schnell zu laden, gute Genauigkeit. Empfohlen für den Einstieg.",
+        "url": "https://alphacephei.com/vosk/models/vosk-model-small-de-0.15.zip",
+    },
+    "de-large": {
+        "id": "de-large",
+        "label": "Präzises Modell",
+        "description": "~1,9 GB, längerer Download und Ladezeit, aber feinere Erkennung.",
+        "url": "https://alphacephei.com/vosk/models/vosk-model-de-0.21.zip",
+    },
 }
+
+# Modèles proposés pour chaque langue (voir get_state -> availableVoskModels),
+# dans l'ordre d'affichage léger -> précis.
+VOSK_MODEL_IDS_BY_LANG = {
+    "fr": ["fr-small", "fr-large"],
+    "en": ["en-small", "en-large"],
+    "nl": ["nl-small", "nl-large"],
+    "es": ["es-small", "es-large"],
+    "it": ["it-small", "it-large"],
+    "de": ["de-small", "de-large"],
+}
+
+
+def vosk_models_for_language(lang):
+    ids = VOSK_MODEL_IDS_BY_LANG.get(lang, VOSK_MODEL_IDS_BY_LANG[DEFAULT_UI_LANGUAGE])
+    return [VOSK_MODELS[i] for i in ids if i in VOSK_MODELS]
 
 
 def _download_file_with_retry(url, dest_path, headers=None, timeout=30,
@@ -339,11 +419,35 @@ def find_ollama_executable():
     return None
 
 
+# --------------------------------------------------------------------------
+# Langue de l'interface et de l'assistant IA — voir "ui_language" dans
+# ai_config.json, Api.ui_language et set_ui_language(). Détermine les textes
+# de l'interface (voir gui/i18n.js), les instructions données à l'IA
+# (ai_system_prompt), la détection question/commande après le mot
+# d'activation (AI_QUESTION_MARKER_RE_BY_LANG) et les modèles Vosk/voix
+# Piper proposés par défaut. Le français reste la langue par défaut pour ne
+# rien changer aux installations existantes.
+# --------------------------------------------------------------------------
+SUPPORTED_LANGUAGES = {
+    "fr": "Français",
+    "en": "English",
+    "nl": "Nederlands",
+    "es": "Español",
+    "it": "Italiano",
+    "de": "Deutsch",
+}
+DEFAULT_UI_LANGUAGE = "fr"
+
 # Longueur de réponse souhaitée pour l'assistant IA — réglable dans le
 # panneau IA. "normal" reste volontairement strict sur les questions de
 # suivi : les modèles de langage ont tendance à enchaîner plusieurs
 # questions à la suite ("Comment allez-vous ? Avez-vous déjà... ? Que
 # puis-je faire... ?"), ce qui alourdit beaucoup une conversation vocale.
+# Les clés ("short"/"normal"/"long") sont identiques dans toutes les
+# langues — RESPONSE_LENGTH_INSTRUCTIONS (français) sert donc aussi de
+# référence pour valider ce réglage ailleurs dans le fichier, indépendamment
+# de la langue choisie ; seul RESPONSE_LENGTH_INSTRUCTIONS_BY_LANG varie
+# selon "ui_language" (voir ai_system_prompt).
 RESPONSE_LENGTH_INSTRUCTIONS = {
     "short": (
         "Réponds en une seule phrase très courte (15 mots maximum). Va droit au "
@@ -365,39 +469,290 @@ RESPONSE_LENGTH_INSTRUCTIONS = {
 }
 DEFAULT_RESPONSE_LENGTH = "normal"
 
+RESPONSE_LENGTH_INSTRUCTIONS_BY_LANG = {
+    "fr": RESPONSE_LENGTH_INSTRUCTIONS,
+    "en": {
+        "short": (
+            "Answer in a single very short sentence (15 words max). Get straight "
+            "to the point: no greeting or politeness formula unless essential, "
+            "don't rephrase the question, don't add unrequested context. Only ask "
+            "a follow-up question if absolutely necessary to understand the "
+            "request — otherwise ask none."
+        ),
+        "normal": (
+            "Answer concisely: a few short sentences are enough for most "
+            "exchanges. Never ask more than one follow-up question at a time — "
+            "avoid stacking several questions in the same reply."
+        ),
+        "long": (
+            "You can go into more detail when the topic warrants it, while "
+            "staying clear and well structured. Still limit yourself to one "
+            "follow-up question at a time."
+        ),
+    },
+    "nl": {
+        "short": (
+            "Antwoord in één zeer korte zin (maximaal 15 woorden). Kom meteen ter "
+            "zake: geen begroeting of beleefdheidsformule tenzij noodzakelijk, "
+            "herformuleer de vraag niet, voeg geen ongevraagde context toe. Stel "
+            "alleen een vervolgvraag als dat absoluut noodzakelijk is om het "
+            "verzoek te begrijpen — anders geen enkele."
+        ),
+        "normal": (
+            "Antwoord beknopt: een paar korte zinnen volstaan voor de meeste "
+            "gesprekken. Stel nooit meer dan één vervolgvraag tegelijk — vermijd "
+            "meerdere vragen na elkaar in hetzelfde antwoord."
+        ),
+        "long": (
+            "Je mag je antwoorden uitgebreider maken wanneer het onderwerp dat "
+            "rechtvaardigt, terwijl je duidelijk en goed gestructureerd blijft. "
+            "Beperk je nog steeds tot één vervolgvraag tegelijk."
+        ),
+    },
+    "es": {
+        "short": (
+            "Responde en una sola frase muy corta (máximo 15 palabras). Ve "
+            "directo al grano: sin saludo ni fórmula de cortesía salvo que sea "
+            "imprescindible, no repitas la pregunta, no añadas contexto no "
+            "solicitado. Solo haz una pregunta de seguimiento si es absolutamente "
+            "necesario para entender la petición — si no, no hagas ninguna."
+        ),
+        "normal": (
+            "Responde de forma concisa: unas pocas frases cortas bastan para la "
+            "mayoría de los intercambios. Nunca hagas más de una pregunta de "
+            "seguimiento a la vez — evita encadenar varias preguntas en la misma "
+            "respuesta."
+        ),
+        "long": (
+            "Puedes ampliar tus respuestas cuando el tema lo justifique, "
+            "manteniéndote claro y bien estructurado. Aun así, límitate a una "
+            "pregunta de seguimiento a la vez."
+        ),
+    },
+    "it": {
+        "short": (
+            "Rispondi con una sola frase molto breve (massimo 15 parole). Vai "
+            "dritto al punto: niente saluti o formule di cortesia se non "
+            "indispensabili, non riformulare la domanda, non aggiungere contesto "
+            "non richiesto. Fai una domanda di chiarimento solo se assolutamente "
+            "indispensabile per capire la richiesta — altrimenti non farne "
+            "nessuna."
+        ),
+        "normal": (
+            "Rispondi in modo conciso: bastano poche frasi brevi per la maggior "
+            "parte degli scambi. Non fare mai più di una domanda di chiarimento "
+            "alla volta — evita di concatenare più domande nella stessa "
+            "risposta."
+        ),
+        "long": (
+            "Puoi approfondire le risposte quando l'argomento lo giustifica, "
+            "restando comunque chiaro e ben strutturato. Limitati comunque a una "
+            "domanda di chiarimento alla volta."
+        ),
+    },
+    "de": {
+        "short": (
+            "Antworte in einem einzigen, sehr kurzen Satz (maximal 15 Wörter). "
+            "Komm direkt zum Punkt: keine Begrüßung oder Höflichkeitsfloskel, "
+            "außer sie ist unverzichtbar, formuliere die Frage nicht um, füge "
+            "keinen ungefragten Kontext hinzu. Stelle nur dann eine Rückfrage, "
+            "wenn es absolut notwendig ist, um die Anfrage zu verstehen — "
+            "andernfalls stelle keine."
+        ),
+        "normal": (
+            "Antworte präzise: ein paar kurze Sätze reichen für die meisten "
+            "Austausche. Stelle nie mehr als eine Rückfrage auf einmal — vermeide "
+            "es, mehrere Fragen in derselben Antwort aneinanderzureihen."
+        ),
+        "long": (
+            "Du kannst deine Antworten ausführlicher gestalten, wenn das Thema es "
+            "rechtfertigt, bleibe dabei aber klar und gut strukturiert. Beschränke "
+            "dich trotzdem auf eine Rückfrage auf einmal."
+        ),
+    },
+}
 
-def ai_system_prompt(name, custom_context=None, user_name=None, response_length=None):
-    length_instruction = RESPONSE_LENGTH_INSTRUCTIONS.get(
-        response_length, RESPONSE_LENGTH_INSTRUCTIONS[DEFAULT_RESPONSE_LENGTH]
-    )
-    base = (
-        f"Tu es {name}, un copilote embarqué dans une application de "
-        "NOVAVOX pour Star Citizen. Réponds en français, sur un ton "
-        f"amical. {length_instruction} Tu connais bien les mécaniques et les "
-        "commandes clavier de Star Citizen et tu peux aider l'utilisateur "
-        "à comprendre le jeu, mais tu peux aussi discuter de sujets "
-        "généraux."
-    )
+# Nom de la langue tel qu'énoncé DANS la langue elle-même (pas de traduction
+# croisée) — utilisé dans l'instruction "réponds en ..." de ai_system_prompt.
+_LANGUAGE_SELF_NAME = {
+    "fr": "français",
+    "en": "English",
+    "nl": "Nederlands",
+    "es": "español",
+    "it": "italiano",
+    "de": "Deutsch",
+}
+
+
+def ai_system_prompt(name, custom_context=None, user_name=None, response_length=None, lang=None):
+    lang = lang if lang in SUPPORTED_LANGUAGES else DEFAULT_UI_LANGUAGE
+    instructions = RESPONSE_LENGTH_INSTRUCTIONS_BY_LANG.get(lang, RESPONSE_LENGTH_INSTRUCTIONS_BY_LANG["fr"])
+    length_instruction = instructions.get(response_length, instructions[DEFAULT_RESPONSE_LENGTH])
+    language_name = _LANGUAGE_SELF_NAME.get(lang, _LANGUAGE_SELF_NAME["fr"])
+
+    if lang == "fr":
+        base = (
+            f"Tu es {name}, un copilote embarqué dans une application de "
+            "NOVAVOX pour Star Citizen. Réponds en français, sur un ton "
+            f"amical. {length_instruction} Tu connais bien les mécaniques et les "
+            "commandes clavier de Star Citizen et tu peux aider l'utilisateur "
+            "à comprendre le jeu, mais tu peux aussi discuter de sujets "
+            "généraux."
+        )
+    elif lang == "en":
+        base = (
+            f"You are {name}, an onboard copilot in a NOVAVOX application for "
+            f"Star Citizen. Reply in {language_name}, in a friendly tone. "
+            f"{length_instruction} You know Star Citizen's mechanics and keyboard "
+            "commands well and can help the user understand the game, but you can "
+            "also chat about general topics."
+        )
+    elif lang == "nl":
+        base = (
+            f"Je bent {name}, een copiloot aan boord in een NOVAVOX-applicatie "
+            f"voor Star Citizen. Antwoord in het {language_name}, op een "
+            f"vriendelijke toon. {length_instruction} Je kent de mechanica en "
+            "toetsenbordcommando's van Star Citizen goed en kunt de gebruiker "
+            "helpen het spel te begrijpen, maar je kunt ook over algemene "
+            "onderwerpen praten."
+        )
+    elif lang == "es":
+        base = (
+            f"Eres {name}, un copiloto de a bordo en una aplicación NOVAVOX para "
+            f"Star Citizen. Responde en {language_name}, con un tono amistoso. "
+            f"{length_instruction} Conoces bien las mecánicas y los comandos de "
+            "teclado de Star Citizen y puedes ayudar al usuario a entender el "
+            "juego, pero también puedes hablar de temas generales."
+        )
+    elif lang == "it":
+        base = (
+            f"Sei {name}, un copilota di bordo in un'applicazione NOVAVOX per "
+            f"Star Citizen. Rispondi in {language_name}, con un tono amichevole. "
+            f"{length_instruction} Conosci bene le meccaniche e i comandi da "
+            "tastiera di Star Citizen e puoi aiutare l'utente a capire il gioco, "
+            "ma puoi anche parlare di argomenti generali."
+        )
+    else:  # "de"
+        base = (
+            f"Du bist {name}, ein Bordcopilot in einer NOVAVOX-Anwendung für "
+            f"Star Citizen. Antworte auf {language_name}, in freundlichem Ton. "
+            f"{length_instruction} Du kennst die Mechaniken und Tastaturbefehle "
+            "von Star Citizen gut und kannst dem Nutzer helfen, das Spiel zu "
+            "verstehen, kannst aber auch über allgemeine Themen sprechen."
+        )
+
     user_name = (user_name or "").strip()
     if user_name:
-        base += (
-            f"\n\nL'utilisateur s'appelle {user_name}. Adresse-toi à lui/elle par ce "
-            "prénom de temps en temps, de façon naturelle (pas à chaque phrase), pour "
-            "rendre la conversation plus personnelle."
-        )
+        if lang == "fr":
+            base += (
+                f"\n\nL'utilisateur s'appelle {user_name}. Adresse-toi à lui/elle par ce "
+                "prénom de temps en temps, de façon naturelle (pas à chaque phrase), pour "
+                "rendre la conversation plus personnelle."
+            )
+        elif lang == "en":
+            base += (
+                f"\n\nThe user's name is {user_name}. Address them by that first name "
+                "from time to time, naturally (not in every sentence), to make the "
+                "conversation more personal."
+            )
+        elif lang == "nl":
+            base += (
+                f"\n\nDe gebruiker heet {user_name}. Spreek hem/haar af en toe met deze "
+                "voornaam aan, op een natuurlijke manier (niet in elke zin), om het "
+                "gesprek persoonlijker te maken."
+            )
+        elif lang == "es":
+            base += (
+                f"\n\nEl usuario se llama {user_name}. Dirígete a él/ella por ese nombre "
+                "de vez en cuando, de forma natural (no en cada frase), para hacer la "
+                "conversación más personal."
+            )
+        elif lang == "it":
+            base += (
+                f"\n\nL'utente si chiama {user_name}. Rivolgiti a lui/lei con questo nome "
+                "ogni tanto, in modo naturale (non in ogni frase), per rendere la "
+                "conversazione più personale."
+            )
+        else:  # "de"
+            base += (
+                f"\n\nDer Nutzer heißt {user_name}. Sprich ihn/sie hin und wieder mit "
+                "diesem Vornamen an, auf natürliche Weise (nicht in jedem Satz), um das "
+                "Gespräch persönlicher zu gestalten."
+            )
+
     custom_context = (custom_context or "").strip()
     if custom_context:
-        base += (
-            "\n\nVoici des informations supplémentaires fournies par l'utilisateur "
-            "(lore, règles maison, contexte de sa partie...), à prendre en compte "
-            "en priorité dans tes réponses si elles sont pertinentes. Base-toi "
-            "STRICTEMENT sur ces informations pour tout ce qui concerne des faits "
-            "précis (distances, noms de lieux, de stations, de jump points, "
-            "procédures...) : n'invente jamais un détail chiffré ou un nom qui n'y "
-            "figure pas explicitement. Si l'information demandée n'est pas dans ce "
-            "contexte, dis-le clairement plutôt que d'inventer une réponse "
-            "plausible :\n" + custom_context
-        )
+        if lang == "fr":
+            base += (
+                "\n\nVoici des informations supplémentaires fournies par l'utilisateur "
+                "(lore, règles maison, contexte de sa partie...), à prendre en compte "
+                "en priorité dans tes réponses si elles sont pertinentes. Base-toi "
+                "STRICTEMENT sur ces informations pour tout ce qui concerne des faits "
+                "précis (distances, noms de lieux, de stations, de jump points, "
+                "procédures...) : n'invente jamais un détail chiffré ou un nom qui n'y "
+                "figure pas explicitement. Si l'information demandée n'est pas dans ce "
+                "contexte, dis-le clairement plutôt que d'inventer une réponse "
+                "plausible :\n" + custom_context
+            )
+        elif lang == "en":
+            base += (
+                "\n\nHere is additional information provided by the user (lore, house "
+                "rules, context about their playthrough...), to take into account as a "
+                "priority in your replies when relevant. Rely STRICTLY on this "
+                "information for anything involving precise facts (distances, place "
+                "names, station names, jump point names, procedures...): never invent "
+                "a figure or a name that isn't explicitly listed here. If the "
+                "requested information isn't in this context, say so clearly instead "
+                "of making up a plausible-sounding answer:\n" + custom_context
+            )
+        elif lang == "nl":
+            base += (
+                "\n\nHier is extra informatie die de gebruiker heeft opgegeven (lore, "
+                "huisregels, context over zijn/haar speelsessie...), waarmee je bij "
+                "voorrang rekening houdt in je antwoorden als het relevant is. Baseer "
+                "je STRIKT op deze informatie voor alles wat precieze feiten betreft "
+                "(afstanden, plaatsnamen, stationsnamen, jump points, procedures...): "
+                "verzin nooit een cijfer of naam die hier niet expliciet in staat. Als "
+                "de gevraagde informatie niet in deze context staat, zeg dat dan "
+                "duidelijk in plaats van een plausibel klinkend antwoord te "
+                "verzinnen:\n" + custom_context
+            )
+        elif lang == "es":
+            base += (
+                "\n\nAquí tienes información adicional proporcionada por el usuario "
+                "(lore, reglas de la casa, contexto de su partida...), que debes tener "
+                "en cuenta con prioridad en tus respuestas cuando sea relevante. "
+                "Básate ESTRICTAMENTE en esta información para todo lo relacionado con "
+                "hechos precisos (distancias, nombres de lugares, estaciones, jump "
+                "points, procedimientos...): nunca inventes una cifra o un nombre que "
+                "no figure explícitamente aquí. Si la información solicitada no está "
+                "en este contexto, dilo claramente en lugar de inventar una respuesta "
+                "plausible:\n" + custom_context
+            )
+        elif lang == "it":
+            base += (
+                "\n\nEcco alcune informazioni aggiuntive fornite dall'utente (lore, "
+                "regole personalizzate, contesto della sua partita...), da tenere in "
+                "considerazione con priorità nelle tue risposte quando pertinenti. "
+                "Basati RIGOROSAMENTE su queste informazioni per tutto ciò che "
+                "riguarda fatti precisi (distanze, nomi di luoghi, stazioni, jump "
+                "point, procedure...): non inventare mai una cifra o un nome che non "
+                "vi compaia esplicitamente. Se l'informazione richiesta non è presente "
+                "in questo contesto, dillo chiaramente invece di inventare una "
+                "risposta plausibile:\n" + custom_context
+            )
+        else:  # "de"
+            base += (
+                "\n\nHier sind zusätzliche Informationen des Nutzers (Lore, "
+                "Hausregeln, Kontext zu seinem/ihrem Spielverlauf...), die du in "
+                "deinen Antworten vorrangig berücksichtigst, wenn sie relevant sind. "
+                "Stütze dich STRIKT auf diese Informationen bei allem, was genaue "
+                "Fakten betrifft (Entfernungen, Orts-, Stations- und "
+                "Jump-Point-Namen, Abläufe...): erfinde niemals eine Zahl oder einen "
+                "Namen, der hier nicht ausdrücklich genannt ist. Falls die "
+                "gewünschte Information nicht in diesem Kontext steht, sag das "
+                "klar, statt eine plausibel klingende Antwort zu erfinden:\n" + custom_context
+            )
     return base
 
 
@@ -538,34 +893,113 @@ PIPER_EXE = os.path.join(PIPER_DIR, "piper.exe")
 PIPER_VOICES_DIR = os.path.join(PIPER_DIR, "voices")
 PIPER_GITHUB_LATEST_API = "https://api.github.com/repos/rhasspy/piper/releases/latest"
 
-# Quelques voix françaises curatées parmi celles publiées sur le dépôt
-# Hugging Face officiel de Piper (rhasspy/piper-voices) — un éventail de
-# styles/genres différents, pas un genre imposé par défaut : le choix reste
-# entièrement à l'utilisateur, avec un bouton de test avant de valider.
+# Quelques voix curatées par langue parmi celles publiées sur le dépôt
+# Hugging Face officiel de Piper (rhasspy/piper-voices, voir aussi
+# https://github.com/rhasspy/piper/blob/master/VOICES.md pour la liste
+# complète) — un éventail de styles/genres différents par langue, pas un
+# genre imposé par défaut : le choix reste entièrement à l'utilisateur, avec
+# un bouton de test avant de valider. "lang" sert à ne proposer par défaut
+# que les voix de la langue de l'interface (voir piper_get_status).
 PIPER_VOICES = {
     "fr_FR-siwis-medium": {
+        "lang": "fr",
         "label": "Siwis — voix féminine, très naturelle (qualité medium)",
         "url_base": "https://huggingface.co/rhasspy/piper-voices/resolve/main/fr/fr_FR/siwis/medium/fr_FR-siwis-medium",
     },
     "fr_FR-siwis-low": {
+        "lang": "fr",
         "label": "Siwis — même voix féminine, version légère/rapide",
         "url_base": "https://huggingface.co/rhasspy/piper-voices/resolve/main/fr/fr_FR/siwis/low/fr_FR-siwis-low",
     },
     "fr_FR-tom-medium": {
+        "lang": "fr",
         "label": "Tom — voix masculine, ton neutre",
         "url_base": "https://huggingface.co/rhasspy/piper-voices/resolve/main/fr/fr_FR/tom/medium/fr_FR-tom-medium",
     },
     "fr_FR-gilles-low": {
+        "lang": "fr",
         "label": "Gilles — voix masculine",
         "url_base": "https://huggingface.co/rhasspy/piper-voices/resolve/main/fr/fr_FR/gilles/low/fr_FR-gilles-low",
     },
     "fr_FR-upmc-medium": {
+        "lang": "fr",
         "label": "UPMC — voix mixte (jessica/pierre)",
         "url_base": "https://huggingface.co/rhasspy/piper-voices/resolve/main/fr/fr_FR/upmc/medium/fr_FR-upmc-medium",
     },
     "fr_FR-mls_1840-low": {
+        "lang": "fr",
         "label": "MLS 1840 — voix alternative",
         "url_base": "https://huggingface.co/rhasspy/piper-voices/resolve/main/fr/fr_FR/mls_1840/low/fr_FR-mls_1840-low",
+    },
+    "en_US-amy-medium": {
+        "lang": "en",
+        "label": "Amy — female voice, conversational (medium quality)",
+        "url_base": "https://huggingface.co/rhasspy/piper-voices/resolve/main/en/en_US/amy/medium/en_US-amy-medium",
+    },
+    "en_US-ryan-medium": {
+        "lang": "en",
+        "label": "Ryan — male voice",
+        "url_base": "https://huggingface.co/rhasspy/piper-voices/resolve/main/en/en_US/ryan/medium/en_US-ryan-medium",
+    },
+    "en_US-lessac-medium": {
+        "lang": "en",
+        "label": "Lessac — neutral, very natural voice",
+        "url_base": "https://huggingface.co/rhasspy/piper-voices/resolve/main/en/en_US/lessac/medium/en_US-lessac-medium",
+    },
+    "nl_NL-pim-medium": {
+        "lang": "nl",
+        "label": "Pim — mannelijke stem",
+        "url_base": "https://huggingface.co/rhasspy/piper-voices/resolve/main/nl/nl_NL/pim/medium/nl_NL-pim-medium",
+    },
+    "nl_NL-ronnie-medium": {
+        "lang": "nl",
+        "label": "Ronnie — alternatieve stem",
+        "url_base": "https://huggingface.co/rhasspy/piper-voices/resolve/main/nl/nl_NL/ronnie/medium/nl_NL-ronnie-medium",
+    },
+    "nl_NL-mls-medium": {
+        "lang": "nl",
+        "label": "MLS — alternatieve stem",
+        "url_base": "https://huggingface.co/rhasspy/piper-voices/resolve/main/nl/nl_NL/mls/medium/nl_NL-mls-medium",
+    },
+    "es_ES-davefx-medium": {
+        "lang": "es",
+        "label": "Davefx — voz masculina",
+        "url_base": "https://huggingface.co/rhasspy/piper-voices/resolve/main/es/es_ES/davefx/medium/es_ES-davefx-medium",
+    },
+    "es_ES-sharvard-medium": {
+        "lang": "es",
+        "label": "Sharvard — voz alternativa",
+        "url_base": "https://huggingface.co/rhasspy/piper-voices/resolve/main/es/es_ES/sharvard/medium/es_ES-sharvard-medium",
+    },
+    "es_ES-mls_10246-low": {
+        "lang": "es",
+        "label": "MLS 10246 — voz alternativa, versión ligera/rápida",
+        "url_base": "https://huggingface.co/rhasspy/piper-voices/resolve/main/es/es_ES/mls_10246/low/es_ES-mls_10246-low",
+    },
+    "it_IT-paola-medium": {
+        "lang": "it",
+        "label": "Paola — voce femminile",
+        "url_base": "https://huggingface.co/rhasspy/piper-voices/resolve/main/it/it_IT/paola/medium/it_IT-paola-medium",
+    },
+    "it_IT-riccardo-x_low": {
+        "lang": "it",
+        "label": "Riccardo — voce maschile, versione molto leggera",
+        "url_base": "https://huggingface.co/rhasspy/piper-voices/resolve/main/it/it_IT/riccardo/x_low/it_IT-riccardo-x_low",
+    },
+    "de_DE-thorsten-medium": {
+        "lang": "de",
+        "label": "Thorsten — männliche Stimme, sehr natürlich",
+        "url_base": "https://huggingface.co/rhasspy/piper-voices/resolve/main/de/de_DE/thorsten/medium/de_DE-thorsten-medium",
+    },
+    "de_DE-kerstin-low": {
+        "lang": "de",
+        "label": "Kerstin — weibliche Stimme, leichte/schnelle Version",
+        "url_base": "https://huggingface.co/rhasspy/piper-voices/resolve/main/de/de_DE/kerstin/low/de_DE-kerstin-low",
+    },
+    "de_DE-mls-medium": {
+        "lang": "de",
+        "label": "MLS — alternative Stimme",
+        "url_base": "https://huggingface.co/rhasspy/piper-voices/resolve/main/de/de_DE/mls/medium/de_DE-mls-medium",
     },
 }
 # Réglages fins de la voix Piper (passés directement à piper.exe) : plus
@@ -749,6 +1183,33 @@ AI_QUESTION_MARKER_RE = re.compile(
     r"quel(?:le)?s? (?:touche|est|sont|bouton)|"
     r"\bcomment\b|\bpourquoi\b|\bcombien\b|[aà] quoi sert|\bo[uù] est\b"
 )
+# Équivalents de AI_QUESTION_MARKER_RE (ci-dessus) pour les autres langues de
+# l'interface (voir SUPPORTED_LANGUAGES) — mêmes tournures interrogatives
+# typiques (quoi/où/quelle touche/comment/pourquoi/combien/à quoi sert),
+# utilisées selon "ui_language" par _try_execute_command_from_ai_text.
+AI_QUESTION_MARKER_RE_BY_LANG = {
+    "fr": AI_QUESTION_MARKER_RE,
+    "en": re.compile(
+        r"\bwhat'?s\b|\bwhat is\b|\bwhere'?s\b|\bwhere is\b|"
+        r"\bwhich (?:key|button)\b|\bhow\b|\bwhy\b"
+    ),
+    "nl": re.compile(
+        r"\bwat is\b|\bwaar is\b|\bwelke? (?:toets|knop|is|zijn)\b|"
+        r"\bhoe\b|\bwaarom\b|\bhoeveel\b|\bwaarvoor\b"
+    ),
+    "es": re.compile(
+        r"qu[ée] es\b|d[oó]nde est[aá]\b|qu[ée] (?:tecla|bot[oó]n)\b|"
+        r"\bc[oó]mo\b|\bpor ?qu[ée]\b|\bcu[aá]nto\b|para qu[ée] sirve\b"
+    ),
+    "it": re.compile(
+        r"cos['\s]?[eè]\b|dov['\s]?[eè]\b|quale? (?:tasto|pulsante)\b|"
+        r"\bcome\b|\bperch[eé]\b|\bquant[oi]\b|a cosa serve\b"
+    ),
+    "de": re.compile(
+        r"\bwas ist\b|\bwo ist\b|welche[rs]? (?:taste|knopf)\b|"
+        r"\bwie\b|\bwarum\b|\bwof[uü]r\b"
+    ),
+}
 
 # Volume/sensibilité du micro appliqué par l'appli elle-même (indépendant du
 # volume micro réglé dans Windows). Un facteur < 1.0 atténue tout ce que le
@@ -1360,6 +1821,7 @@ def _auto_backup_config():
 
 def load_ai_config():
     config = {
+        "ui_language": DEFAULT_UI_LANGUAGE,
         "name": DEFAULT_AI_NAME,
         "voice": None,
         "confirm_commands": False,
@@ -1395,6 +1857,8 @@ def load_ai_config():
             for key in config:
                 if key in data:
                     config[key] = data[key]
+            if config["ui_language"] not in SUPPORTED_LANGUAGES:
+                config["ui_language"] = DEFAULT_UI_LANGUAGE
             if config["response_length"] not in RESPONSE_LENGTH_INSTRUCTIONS:
                 config["response_length"] = DEFAULT_RESPONSE_LENGTH
             if config["piper_voice"] not in PIPER_VOICES:
@@ -2060,6 +2524,9 @@ class Api:
         self.ai_history = []
         self.ai_voice_output = True
         ai_config = load_ai_config()
+        # Langue de l'interface/IA (voir SUPPORTED_LANGUAGES) : déjà validée
+        # par load_ai_config, jamais None/inconnue ici.
+        self.ui_language = ai_config["ui_language"]
         self.ai_name = ai_config["name"]
         self.ai_enabled = bool(ai_config.get("ai_enabled", True))
         self.ai_model = ai_config["model"] or DEFAULT_OLLAMA_MODEL
@@ -2354,7 +2821,7 @@ class Api:
             "modelPath": self.model_path,
             "listening": self.listening,
             "modelReady": model_folder_is_valid(self.model_path),
-            "availableVoskModels": list(VOSK_MODELS.values()),
+            "availableVoskModels": vosk_models_for_language(self.ui_language),
             "listenMode": self.listen_mode,
             "listenHotkey": self.listen_hotkey,
             "listenHotkeyAvailable": self._hotkey_module_available(),
@@ -2365,7 +2832,22 @@ class Api:
             "profiles": list_profiles(),
             "activeProfile": _active_profile_id,
             "profileCycleHotkey": self.profile_cycle_hotkey,
+            "uiLanguage": self.ui_language,
+            "supportedLanguages": SUPPORTED_LANGUAGES,
         }
+
+    def set_ui_language(self, lang):
+        """Change la langue de l'interface/IA (voir SUPPORTED_LANGUAGES).
+        Ne redémarre rien tout seul : les modèles Vosk/voix Piper proposés
+        pour la nouvelle langue (voir vosk_models_for_language) doivent être
+        téléchargés/choisis séparément si besoin — un changement de langue
+        ne doit jamais supprimer un modèle déjà installé et fonctionnel."""
+        lang = (lang or "").strip().lower()
+        if lang not in SUPPORTED_LANGUAGES:
+            return {"ok": False, "error": "Langue inconnue.", "uiLanguage": self.ui_language}
+        self.ui_language = lang
+        self._persist_ai_config()
+        return {"ok": True, "uiLanguage": self.ui_language}
 
     def get_patch_notes(self):
         """Renvoie le contenu de patch_maj.txt (notes de mise à jour,
@@ -3164,6 +3646,7 @@ class Api:
         save_commands(self.commands)
         self.last_trigger = {}
 
+        self.ui_language = DEFAULT_UI_LANGUAGE
         self.ai_name = DEFAULT_AI_NAME
         self.ai_enabled = True
         self.confirm_commands_voice = False
@@ -3196,6 +3679,7 @@ class Api:
         self.gemini_request_count = 0
         self.gemini_request_day = ""
         save_ai_config({
+            "ui_language": self.ui_language,
             "name": self.ai_name,
             "voice": self.ai_voice,
             "confirm_commands": self.confirm_commands_voice,
@@ -4671,7 +5155,8 @@ class Api:
             game_state_block = game_state_to_prompt_block(self._game_log_watcher.get_state())
 
         system_text = ai_system_prompt(
-            self.gemini_name, self.gemini_custom_context, self.user_name, self.gemini_response_length
+            self.gemini_name, self.gemini_custom_context, self.user_name, self.gemini_response_length,
+            lang=self.ui_language,
         ) + game_state_block
 
         # Gemini attend tout l'historique à chaque appel (comme Ollama),
@@ -4744,6 +5229,7 @@ class Api:
 
     def _persist_ai_config(self):
         save_ai_config({
+            "ui_language": self.ui_language,
             "name": self.ai_name,
             "confirm_commands": self.confirm_commands_voice,
             "ai_enabled": self.ai_enabled,
@@ -5189,13 +5675,17 @@ class Api:
 
     def piper_get_status(self):
         """État actuel de Piper pour le panneau : moteur installé ou non,
-        et pour chaque voix curatée si elle est déjà téléchargée."""
+        et pour chaque voix curatée si elle est déjà téléchargée. "lang"
+        permet à l'interface de ne mettre en avant que les voix de la
+        langue actuellement choisie (voir ui_language) sans empêcher de
+        choisir une voix d'une autre langue si l'utilisateur le souhaite."""
         return {
             "engineInstalled": os.path.isfile(PIPER_EXE),
             "voices": [
                 {
                     "id": vid,
                     "label": info["label"],
+                    "lang": info.get("lang", "fr"),
                     "installed": os.path.isfile(os.path.join(PIPER_VOICES_DIR, f"{vid}.onnx")),
                 }
                 for vid, info in PIPER_VOICES.items()
@@ -5774,8 +6264,10 @@ class Api:
 
         messages = [{
             "role": "system",
-            "content": ai_system_prompt(self.ai_name, self.ai_custom_context, self.user_name, self.ai_response_length)
-                       + game_state_block,
+            "content": ai_system_prompt(
+                self.ai_name, self.ai_custom_context, self.user_name, self.ai_response_length,
+                lang=self.ui_language,
+            ) + game_state_block,
         }] + self.ai_history
         num_predict = self.AI_NUM_PREDICT_BY_LENGTH.get(
             self.ai_response_length, self.AI_NUM_PREDICT_BY_LENGTH["normal"]
@@ -6839,8 +7331,9 @@ class Api:
         text_norm = (text or "").lower().strip()
         if not text_norm:
             return False
-        if AI_QUESTION_MARKER_RE.search(text_norm):
-            # Tournure clairement interrogative (voir AI_QUESTION_MARKER_RE) :
+        question_marker_re = AI_QUESTION_MARKER_RE_BY_LANG.get(self.ui_language, AI_QUESTION_MARKER_RE)
+        if question_marker_re.search(text_norm):
+            # Tournure clairement interrogative (voir AI_QUESTION_MARKER_RE_BY_LANG) :
             # même si la phrase de la commande y apparaît mot pour mot, c'est
             # une question sur cette commande, pas un ordre de l'exécuter.
             return False

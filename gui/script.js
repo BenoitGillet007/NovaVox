@@ -94,6 +94,8 @@ async function init() {
   bindEvents();
   try {
     const data = await window.pywebview.api.get_state();
+    applyTranslations(data.uiLanguage || "fr");
+    populateUiLanguageSelect(data.supportedLanguages || {}, data.uiLanguage || "fr");
     state.commands = data.commands || [];
     document.getElementById("modelPath").value = data.modelPath || "";
     state.listenMode = data.listenMode || "always";
@@ -125,7 +127,7 @@ async function init() {
   }
   checkForUpdate(); // ne bloque pas le reste de l'init (pas d'await bloquant l'UI)
   initAiButtonsVisibility(); // pas d'await bloquant : juste affichage des boutons du haut
-  setStatus("idle", "Arrêté", "Système en veille");
+  setStatus("idle", t("status.idle.label"), t("status.idle.sub"));
 }
 
 // Cache dès le lancement les boutons "Assistant IA"/"Assistant Gemini" de la
@@ -197,6 +199,7 @@ function bindEvents() {
   document.getElementById("patchNotesModal").addEventListener("click", (e) => {
     if (e.target.id === "patchNotesModal") closePatchNotes();
   });
+  document.getElementById("uiLanguageSelect").addEventListener("change", onUiLanguageChange);
   document.getElementById("browseBtn").addEventListener("click", browseModel);
   document.getElementById("changeVoskModelBtn").addEventListener("click", openVoskModelChange);
   document.getElementById("closeModelSetupBtn").addEventListener("click", closeModelSetup);
@@ -1827,30 +1830,69 @@ async function toggleListening() {
       appendLog("[Erreur] Sélectionnez d'abord un dossier de modèle Vosk.", "error");
       return;
     }
-    setStatus("loading", "Chargement...", "Initialisation du modèle");
+    setStatus("loading", t("status.loading.label"), t("status.loading.sub"));
     btn.disabled = true;
     const res = await window.pywebview.api.start_listening(modelPath);
     btn.disabled = false;
 
     if (!res.ok) {
-      setStatus("error", "Erreur", res.error);
+      setStatus("error", t("status.error.label"), res.error);
       appendLog(`[Erreur] ${res.error}`, "error");
       return;
     }
     state.listening = true;
     state.micGateOpen = true;
-    btn.textContent = "Couper l'écoute";
+    btn.textContent = t("engage.stop");
     btn.classList.remove("btn-engage");
     btn.classList.add("btn-danger");
     updateMicGateBadge();
   } else {
     await window.pywebview.api.stop_listening();
     state.listening = false;
-    btn.textContent = "Engager l'écoute";
+    btn.textContent = t("engage.start");
     btn.classList.remove("btn-danger");
     btn.classList.add("btn-engage");
-    setStatus("idle", "Arrêté", "Système en veille");
+    setStatus("idle", t("status.idle.label"), t("status.idle.sub"));
   }
+}
+
+/* -------------------------------------------------- Langue de l'interface */
+
+// Remplit le sélecteur de langue (Réglages > NovaVox) avec les langues
+// connues (voir SUPPORTED_LANGUAGES côté app.py) — chaque option est
+// libellée dans SA PROPRE langue (ex. "Deutsch", pas "Allemand"), convention
+// habituelle des sélecteurs de langue.
+function populateUiLanguageSelect(languages, current) {
+  const select = document.getElementById("uiLanguageSelect");
+  if (!select) return;
+  select.innerHTML = "";
+  Object.entries(languages).forEach(([code, label]) => {
+    const opt = document.createElement("option");
+    opt.value = code;
+    opt.textContent = label;
+    select.appendChild(opt);
+  });
+  select.value = current;
+}
+
+// Appelé au changement de langue dans les Réglages : persiste côté Python
+// (set_ui_language, utilisé pour les invites IA et la détection question/
+// commande) puis retraduit immédiatement l'interface déjà affichée, sans
+// attendre un redémarrage. Les modèles Vosk proposés (voir
+// availableVoskModels) sont aussi rafraîchis pour la nouvelle langue.
+async function onUiLanguageChange(e) {
+  const lang = e.target.value;
+  const res = await window.pywebview.api.set_ui_language(lang);
+  if (!res || !res.ok) return;
+  applyTranslations(res.uiLanguage);
+  try {
+    const data = await window.pywebview.api.get_state();
+    state.availableVoskModels = data.availableVoskModels || [];
+  } catch (err) {
+    // Silencieux : la langue est déjà appliquée, ce n'est qu'un
+    // rafraîchissement secondaire de la liste de modèles proposée.
+  }
+  appendLog(`Langue de l'interface changée : ${lang}.`, "info");
 }
 
 /* ---------------------------------------- Fonctions appelées par Python */
@@ -1866,7 +1908,7 @@ function setStatus(status, label, sub) {
   if (status === "idle" || status === "error") {
     state.listening = false;
     const btn = document.getElementById("engageBtn");
-    btn.textContent = "Engager l'écoute";
+    btn.textContent = t("engage.start");
     btn.classList.remove("btn-danger");
     btn.classList.add("btn-engage");
     btn.disabled = false;

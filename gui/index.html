@@ -7,6 +7,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="style.css" />
+<script src="i18n.js"></script>
 </head>
 <body>
   <!-- Écran de chargement affiché dès l'ouverture de la fenêtre, tant que
@@ -41,15 +42,15 @@
         <span class="brand-glyph">⬡</span>
         <div>
           <h1>NOVAVOX</h1>
-          <p class="subtitle">Reconnaissance vocale hors-ligne — Star Citizen</p>
+          <p class="subtitle" data-i18n="topbar.subtitle">Reconnaissance vocale hors-ligne — Star Citizen</p>
         </div>
       </div>
       <div class="topbar-actions">
-        <button id="openAiBtn" class="btn btn-ghost btn-sm" type="button">🤖 Assistant IA</button>
-        <button id="openGeminiBtn" class="btn btn-ghost btn-sm" type="button">🌟 Assistant Gemini</button>
-        <button id="openGameLogBtn" class="btn btn-ghost btn-sm" type="button">🛰 Game.log</button>
-        <button id="openSettingsBtn" class="icon-btn" title="Réglages (modèle vocal, microphone)">⚙️</button>
-        <button id="themeToggle" class="icon-btn" title="Changer de thème">🌙</button>
+        <button id="openAiBtn" class="btn btn-ghost btn-sm" type="button" data-i18n="topbar.ai">🤖 Assistant IA</button>
+        <button id="openGeminiBtn" class="btn btn-ghost btn-sm" type="button" data-i18n="topbar.gemini">🌟 Assistant Gemini</button>
+        <button id="openGameLogBtn" class="btn btn-ghost btn-sm" type="button" data-i18n="topbar.gamelog">🛰 Game.log</button>
+        <button id="openSettingsBtn" class="icon-btn" title="Réglages (modèle vocal, microphone)" data-i18n-title="topbar.settingsTitle">⚙️</button>
+        <button id="themeToggle" class="icon-btn" title="Changer de thème" data-i18n-title="topbar.themeTitle">🌙</button>
       </div>
     </header>
 
@@ -61,12 +62,12 @@
             <div class="core-dot"></div>
           </div>
           <div class="status-text">
-            <span class="status-label" id="statusLabel">Arrêté</span>
-            <span class="status-sub" id="statusSub">Système en veille</span>
+            <span class="status-label" id="statusLabel" data-i18n="status.idle.label">Arrêté</span>
+            <span class="status-sub" id="statusSub" data-i18n="status.idle.sub">Système en veille</span>
           </div>
           <span class="mic-gate-badge hidden" id="micGateBadge"></span>
         </div>
-        <button class="btn btn-engage" id="engageBtn" type="button">Engager l'écoute</button>
+        <button class="btn btn-engage" id="engageBtn" type="button" data-i18n="engage.start">Engager l'écoute</button>
       </div>
     </section>
 
@@ -94,17 +95,17 @@
         <div class="commands-list" id="commandsList"></div>
 
         <form class="add-form" id="addForm">
-          <input id="phraseInput" placeholder="Phrase à dire" autocomplete="off" required />
+          <input id="phraseInput" placeholder="Phrase à dire" autocomplete="off" required data-i18n-placeholder="addform.phrasePlaceholder" />
           <div class="key-field">
-            <input id="keysInput" placeholder="Touche(s)" autocomplete="off" required readonly />
-            <button type="button" class="btn btn-ghost btn-sm" id="openKeyboardBtn">⌨ Choisir</button>
+            <input id="keysInput" placeholder="Touche(s)" autocomplete="off" required readonly data-i18n-placeholder="addform.keysPlaceholder" />
+            <button type="button" class="btn btn-ghost btn-sm" id="openKeyboardBtn" data-i18n="addform.choose">⌨ Choisir</button>
           </div>
           <div class="extra-steps-field">
-            <span class="extra-steps-label">Actions supplémentaires (optionnel, max 4 de plus) :</span>
+            <span class="extra-steps-label" data-i18n="addform.extraLabel">Actions supplémentaires (optionnel, max 4 de plus) :</span>
             <div class="extra-steps-list" id="addExtraStepsList"></div>
-            <button type="button" class="btn btn-ghost btn-sm" id="addExtraStepBtn">+ Action suivante</button>
+            <button type="button" class="btn btn-ghost btn-sm" id="addExtraStepBtn" data-i18n="addform.addStep">+ Action suivante</button>
           </div>
-          <button type="submit" class="btn btn-accent">Ajouter</button>
+          <button type="submit" class="btn btn-accent" data-i18n="addform.submit">Ajouter</button>
         </form>
       </section>
 
@@ -192,15 +193,15 @@
     <div class="modal-overlay hidden" id="settingsModal">
       <div class="modal-panel panel">
         <div class="modal-header">
-          <h2>⚙️ Réglages</h2>
+          <h2 data-i18n="settings.title">⚙️ Réglages</h2>
           <button class="icon-btn" id="closeSettingsBtn" type="button">✕</button>
         </div>
 
         <div class="settings-tabs" id="settingsTabs">
-          <button type="button" class="settings-tab-btn active" data-settings-tab="sons">🔊 Sons</button>
-          <button type="button" class="settings-tab-btn" data-settings-tab="ia">🤖 IA</button>
-          <button type="button" class="settings-tab-btn" data-settings-tab="gemini">🌟 IA Gemini</button>
-          <button type="button" class="settings-tab-btn" data-settings-tab="gamelog">🛰 Game.log</button>
+          <button type="button" class="settings-tab-btn active" data-settings-tab="sons" data-i18n="settings.tab.sons">🔊 Sons</button>
+          <button type="button" class="settings-tab-btn" data-settings-tab="ia" data-i18n="settings.tab.ia">🤖 IA</button>
+          <button type="button" class="settings-tab-btn" data-settings-tab="gemini" data-i18n="settings.tab.gemini">🌟 IA Gemini</button>
+          <button type="button" class="settings-tab-btn" data-settings-tab="gamelog" data-i18n="settings.tab.gamelog">🛰 Game.log</button>
           <button type="button" class="settings-tab-btn" data-settings-tab="divers"><img src="novavox-icon.png" class="settings-tab-icon" alt="" /> NovaVox</button>
         </div>
 
@@ -322,13 +323,24 @@
         <div class="settings-tab-panel hidden" data-settings-panel="divers">
 
           <div class="control-row">
-            <label for="modelPath">Modèle Vosk (français)</label>
+            <label for="uiLanguageSelect" data-i18n="settings.divers.language.label">Langue de l'interface</label>
+            <div class="input-group">
+              <select id="uiLanguageSelect"></select>
+            </div>
+            <p class="mic-gain-hint" data-i18n="settings.divers.language.hint">
+              Traduit l'interface et les réponses de l'assistant IA. Le modèle vocal (Vosk) et la
+              voix (Piper) doivent être choisis séparément pour la nouvelle langue si besoin.
+            </p>
+          </div>
+
+          <div class="control-row">
+            <label for="modelPath" data-i18n="settings.divers.model.label">Modèle vocal (Vosk)</label>
             <div class="input-group">
               <input id="modelPath" type="text" readonly placeholder="Sélectionnez le dossier du modèle..." />
-              <button class="btn btn-ghost" id="browseBtn" type="button">Parcourir</button>
-              <button class="btn btn-ghost" id="changeVoskModelBtn" type="button">Changer de modèle</button>
+              <button class="btn btn-ghost" id="browseBtn" type="button" data-i18n="settings.divers.model.browse">Parcourir</button>
+              <button class="btn btn-ghost" id="changeVoskModelBtn" type="button" data-i18n="settings.divers.model.change">Changer de modèle</button>
             </div>
-            <p class="mic-gain-hint">
+            <p class="mic-gain-hint" data-i18n="settings.divers.model.hint">
               Télécharge un autre modèle Vosk (léger/précis) à la place de celui actuellement
               installé. L'écoute en cours, le cas échéant, est arrêtée le temps du changement —
               relance-la simplement une fois le nouveau modèle installé.
@@ -336,12 +348,12 @@
           </div>
 
           <div class="control-row">
-            <label>📜 Journal système</label>
+            <label data-i18n="settings.divers.log.label">📜 Journal système</label>
             <label class="ai-voice-toggle">
               <input type="checkbox" id="hideSystemLogToggle" />
-              Masquer le journal système de la fenêtre principale
+              <span data-i18n="settings.divers.log.hide">Masquer le journal système de la fenêtre principale</span>
             </label>
-            <p class="mic-gain-hint">
+            <p class="mic-gain-hint" data-i18n="settings.divers.log.hint">
               Le journal continue de fonctionner normalement en arrière-plan (utile
               en cas de dépannage) — seul son affichage est masqué, et la liste des
               commandes prend alors toute la largeur disponible.
@@ -732,8 +744,8 @@
         <div class="modal-footer">
           <button class="btn btn-ghost btn-sm" id="kbClearBtn" type="button">Effacer</button>
           <div class="modal-footer-right">
-            <button class="btn btn-ghost" id="kbCancelBtn" type="button">Annuler</button>
-            <button class="btn btn-accent" id="kbConfirmBtn" type="button">Valider</button>
+            <button class="btn btn-ghost" id="kbCancelBtn" type="button" data-i18n="kb.cancel">Annuler</button>
+            <button class="btn btn-accent" id="kbConfirmBtn" type="button" data-i18n="kb.confirm">Valider</button>
           </div>
         </div>
       </div>
