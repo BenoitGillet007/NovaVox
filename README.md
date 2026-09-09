@@ -241,10 +241,12 @@ Depuis le menu Démarrer (dossier NovaVox > Désinstaller NovaVox), ou via
 
 ## Licence
 
-Ce projet est distribué sous licence [PolyForm Noncommercial 1.0.0](LICENSE) :
-libre de lire, utiliser, modifier et forker à titre non commercial, mais
-**toute utilisation commerciale (vente, intégration dans un produit ou
-service payant...) est interdite** sans autorisation explicite de l'auteur.
+Ce projet est distribué sous licence [PolyForm Noncommercial 1.0.0](LICENSE)
+(texte officiel en anglais, qui fait foi ; [traduction française à titre
+informatif](LICENSE.fr.md)) : libre de lire, utiliser, modifier et forker
+à titre non commercial, mais **toute utilisation commerciale (vente,
+intégration dans un produit ou service payant...) est interdite** sans
+autorisation explicite de l'auteur.
 
 ## Credit
 
