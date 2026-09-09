@@ -699,6 +699,21 @@ DEFAULT_TRIGGER_COOLDOWN = 3.0
 # quoi elle serait toujours envoyée en question à l'IA. Plus la valeur est
 # proche de 1, plus la phrase doit ressembler exactement à la commande.
 AI_COMMAND_MATCH_THRESHOLD = 0.6
+# Tournures interrogatives typiques ("Nova, c'est quoi la touche pour sortir
+# le train d'atterrissage ?") : la question peut contenir mot pour mot la
+# phrase d'une commande existante ("sortir le train d'atterrissage"), ce qui
+# la ferait à tort reconnaître et exécuter comme une commande au lieu de
+# partir en question vers l'IA — vécu en usage réel (le train sortait sans
+# que Nova ne réponde). On ne touche pas à la commande elle-même : dès
+# qu'une de ces tournures apparaît, la phrase est considérée comme une
+# vraie question et n'est plus du tout comparée aux commandes (voir
+# _try_execute_command_from_ai_text).
+AI_QUESTION_MARKER_RE = re.compile(
+    r"c[\s']?est quoi|c[\s']?est o[uù]\b|"
+    r"qu[\s']?est[\s-]?ce que|qu[\s']?est[\s-]?ce qui|"
+    r"quel(?:le)?s? (?:touche|est|sont|bouton)|"
+    r"\bcomment\b|\bpourquoi\b|\bcombien\b|[aà] quoi sert|\bo[uù] est\b"
+)
 
 # Volume/sensibilité du micro appliqué par l'appli elle-même (indépendant du
 # volume micro réglé dans Windows). Un facteur < 1.0 atténue tout ce que le
@@ -6648,6 +6663,11 @@ class Api:
         vers l'IA."""
         text_norm = (text or "").lower().strip()
         if not text_norm:
+            return False
+        if AI_QUESTION_MARKER_RE.search(text_norm):
+            # Tournure clairement interrogative (voir AI_QUESTION_MARKER_RE) :
+            # même si la phrase de la commande y apparaît mot pour mot, c'est
+            # une question sur cette commande, pas un ordre de l'exécuter.
             return False
         idx, ratio = self._find_fuzzy_command_match(text_norm)
         if idx is None:
