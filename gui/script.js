@@ -120,7 +120,13 @@ async function init() {
     }
 
     if (!data.modelReady) {
-      openModelSetup(data.availableVoskModels || []);
+      // Choix de la langue AVANT le modèle vocal (voir openLanguageSetup) :
+      // sans ça, le premier lancement proposait toujours des modèles Vosk
+      // français par défaut, même pour quelqu'un voulant utiliser
+      // NovaVox dans une autre langue — aucun moyen de changer la langue
+      // avant ce choix puisque les Réglages ne sont pas accessibles tant
+      // que cet écran obligatoire du premier lancement est affiché.
+      openLanguageSetup(data.supportedLanguages || {});
     }
   } catch (e) {
     appendLog("[Erreur] Impossible de charger l'état initial.", "error");
@@ -1718,6 +1724,53 @@ async function onClearListenHotkey() {
   state.listenHotkeyAvailable = res.listenHotkeyAvailable !== false;
   renderListenModeUI();
   appendLog("Touche d'activation vocale effacée.", "info");
+}
+
+/* ------------------------------------------ Choix de la langue (1er lancement) */
+
+// Affiché UNE SEULE FOIS, avant le choix du modèle vocal, uniquement au
+// tout premier lancement (voir init() : même condition que
+// openModelSetup, aucun modèle Vosk détecté). Chaque option est libellée
+// dans SA PROPRE langue (ex. "Deutsch") — nécessaire ici puisqu'on ne sait
+// pas encore quelle langue l'utilisateur comprend, donc aucun texte
+// d'instruction traduisible n'est affiché autour, juste les noms de
+// langue eux-mêmes, qui restent compréhensibles peu importe la langue
+// actuelle de l'interface (français par défaut tant que rien n'est choisi).
+function openLanguageSetup(languages) {
+  const list = document.getElementById("languageChoiceList");
+  list.innerHTML = "";
+  Object.entries(languages).forEach(([code, label]) => {
+    const card = document.createElement("button");
+    card.type = "button";
+    card.className = "model-choice-card";
+    card.innerHTML = `<div class="model-choice-title">${escapeHtml(label)}</div>`;
+    card.addEventListener("click", () => confirmLanguageSetup(code));
+    list.appendChild(card);
+  });
+  document.getElementById("languageSetupModal").classList.remove("hidden");
+}
+
+async function confirmLanguageSetup(lang) {
+  const res = await window.pywebview.api.set_ui_language(lang);
+  if (res && res.ok) {
+    applyTranslations(res.uiLanguage);
+    const select = document.getElementById("uiLanguageSelect");
+    if (select) select.value = res.uiLanguage;
+  }
+  document.getElementById("languageSetupModal").classList.add("hidden");
+  // La langue est maintenant connue côté Python (set_ui_language) : on
+  // recharge l'état pour obtenir la liste de modèles Vosk filtrée pour
+  // cette langue (voir vosk_models_for_language côté app.py) avant
+  // d'ouvrir le choix du modèle vocal.
+  try {
+    const data = await window.pywebview.api.get_state();
+    state.availableVoskModels = data.availableVoskModels || [];
+    if (!data.modelReady) {
+      openModelSetup(state.availableVoskModels);
+    }
+  } catch (e) {
+    appendLog("[Erreur] Impossible de charger les modèles vocaux disponibles.", "error");
+  }
 }
 
 /* ---------------------------------------------- Configuration du modèle vocal */
