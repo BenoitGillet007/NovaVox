@@ -16,6 +16,7 @@ import array
 import base64
 import ctypes
 import ctypes.wintypes
+import datetime
 import gc
 import json
 import logging
@@ -35,6 +36,7 @@ import urllib.request
 import wave
 import zipfile
 from logging.handlers import RotatingFileHandler
+from zoneinfo import ZoneInfo
 
 from game_log_watcher import (
     GameLogWatcher,
@@ -211,6 +213,33 @@ GEMINI_AVAILABLE_MODELS = [
         "description": "Quota gratuit plus élevé et réponses plus rapides, un peu moins riches que Flash.",
     },
 ]
+
+# Limites gratuites (RPD, requêtes par jour) du niveau gratuit de l'API
+# Gemini pour les modèles proposés ci-dessus. Comme pour la liste des
+# modèles ci-dessus, Google ajuste régulièrement ses quotas : à revérifier
+# sur https://ai.google.dev/gemini-api/docs/rate-limits si l'API renvoie un
+# 429 "quota exceeded" avant que la barre de progression de l'overlay
+# n'indique la limite atteinte. GEMINI_DAILY_LIMIT_DEFAULT (la plus prudente
+# des deux) sert de repli si un futur modèle ajouté à GEMINI_AVAILABLE_MODELS
+# n'a pas encore été ajouté ici.
+GEMINI_DAILY_LIMITS = {
+    "gemini-3.6-flash": 500,
+    "gemini-3.5-flash-lite": 1500,
+}
+GEMINI_DAILY_LIMIT_DEFAULT = 500
+
+try:
+    # Le quota RPD de Google se réinitialise à minuit heure du Pacifique
+    # (Californie), pas sur une fenêtre glissante de 24h — voir
+    # Api._gemini_quota_state.
+    GEMINI_QUOTA_TZ = ZoneInfo("America/Los_Angeles")
+except Exception:
+    # Base de données de fuseaux horaires introuvable (ex. "tzdata" pas
+    # installé) : repli sur UTC plutôt que de planter toute l'application
+    # pour cette fonctionnalité annexe — seule l'heure exacte de la remise à
+    # zéro du compteur local peut dériver de quelques heures, le comptage
+    # lui-même reste correct.
+    GEMINI_QUOTA_TZ = datetime.timezone.utc
 
 # Emplacements où chercher l'exécutable Ollama si absent du PATH (arrive
 # quand Ollama vient d'être installé sans redémarrer l'application).
@@ -445,12 +474,18 @@ OVERLAY_INDEX = os.path.join(RESOURCE_DIR, "gui", "overlay.html")
 OVERLAY_CONFIG_FILE = os.path.join(BASE_DIR, "overlay_config.json")
 OVERLAY_WINDOW_TITLE = "NovaVoxOverlay"
 OVERLAY_DEFAULT_WIDTH = 260
-OVERLAY_DEFAULT_HEIGHT = 225
+# Utilisée en mode "déplacer" (voir _create_overlay_window et le
+# commentaire d'overlayRecalcHeight dans overlay.html : la fenêtre garde
+# alors une taille fixe pour que toutes les lignes + leurs cases à cocher
+# restent visibles) — donc suffisamment grande pour les 8 lignes actuelles
+# (dont la barre de quota Gemini). Le mode verrouillé, lui, se redimensionne
+# toujours automatiquement au contenu réellement affiché.
+OVERLAY_DEFAULT_HEIGHT = 250
 # Identifiants des lignes affichables dans l'overlay (voir overlay.html) :
 # chacune peut être masquée individuellement par l'utilisateur via une
 # case à cocher visible uniquement en mode "déplacer" (déverrouillé) —
 # voir Api.overlay_set_row_visible. Toutes visibles par défaut.
-OVERLAY_ROW_KEYS = ("time", "listening", "mic", "ai", "phrase", "zone", "lastCmd")
+OVERLAY_ROW_KEYS = ("time", "listening", "mic", "ai", "phrase", "zone", "lastCmd", "geminiQuota")
 
 def _version_tuple(v):
     """Convertit '0.1.2' en (0, 1, 2) pour une comparaison fiable
@@ -1315,6 +1350,8 @@ def load_ai_config():
         "gemini_name": DEFAULT_GEMINI_NAME,
         "gemini_response_length": DEFAULT_RESPONSE_LENGTH,
         "gemini_custom_context": "",
+        "gemini_request_count": 0,
+        "gemini_request_day": "",
     }
     if os.path.exists(AI_CONFIG_FILE):
         try:
@@ -1362,6 +1399,11 @@ def load_ai_config():
             if config.get("gemini_response_length") not in RESPONSE_LENGTH_INSTRUCTIONS:
                 config["gemini_response_length"] = DEFAULT_RESPONSE_LENGTH
             config["gemini_custom_context"] = config.get("gemini_custom_context") or ""
+            try:
+                config["gemini_request_count"] = max(0, int(config.get("gemini_request_count") or 0))
+            except (TypeError, ValueError):
+                config["gemini_request_count"] = 0
+            config["gemini_request_day"] = (config.get("gemini_request_day") or "").strip()
         except Exception:
             pass
     return config
@@ -2080,6 +2122,11 @@ class Api:
         if self.gemini_response_length not in RESPONSE_LENGTH_INSTRUCTIONS:
             self.gemini_response_length = DEFAULT_RESPONSE_LENGTH
         self.gemini_custom_context = ai_config.get("gemini_custom_context", "") or ""
+        # Compteur de requêtes Gemini du jour (RPD, quota gratuit), affiché
+        # sous forme de barre de progression dans l'overlay — voir
+        # _gemini_quota_state/_gemini_record_request et GEMINI_DAILY_LIMITS.
+        self.gemini_request_count = ai_config.get("gemini_request_count", 0) or 0
+        self.gemini_request_day = ai_config.get("gemini_request_day", "") or ""
         self._gemini_awaiting_question = False
         self._gemini_awaiting_since = 0
 
@@ -3108,6 +3155,8 @@ class Api:
         self.gemini_name = DEFAULT_GEMINI_NAME
         self.gemini_response_length = DEFAULT_RESPONSE_LENGTH
         self.gemini_custom_context = ""
+        self.gemini_request_count = 0
+        self.gemini_request_day = ""
         save_ai_config({
             "name": self.ai_name,
             "voice": self.ai_voice,
@@ -3134,6 +3183,8 @@ class Api:
             "gemini_name": self.gemini_name,
             "gemini_response_length": self.gemini_response_length,
             "gemini_custom_context": self.gemini_custom_context,
+            "gemini_request_count": self.gemini_request_count,
+            "gemini_request_day": self.gemini_request_day,
         })
 
         self.input_device_name = None
@@ -4511,6 +4562,33 @@ class Api:
         except Exception as e:
             return {"ok": False, "error": str(e)}
 
+    def _gemini_quota_limit(self):
+        return GEMINI_DAILY_LIMITS.get(self.gemini_model, GEMINI_DAILY_LIMIT_DEFAULT)
+
+    def _gemini_quota_state(self):
+        """Renvoie (requêtes utilisées, limite) pour le modèle Gemini
+        actuel, en remettant d'abord le compteur à zéro si on a changé de
+        jour côté Google (minuit heure du Pacifique, voir GEMINI_QUOTA_TZ)
+        depuis la dernière requête envoyée."""
+        today = datetime.datetime.now(GEMINI_QUOTA_TZ).date().isoformat()
+        if self.gemini_request_day != today:
+            self.gemini_request_day = today
+            self.gemini_request_count = 0
+            self._persist_ai_config()
+        return self.gemini_request_count, self._gemini_quota_limit()
+
+    def _gemini_record_request(self):
+        """Incrémente le compteur de requêtes Gemini du jour (voir
+        _gemini_quota_state) et met à jour la barre de progression de
+        l'overlay en conséquence. Appelé juste avant chaque appel réel à
+        l'API — la remise à zéro quotidienne est gérée au passage."""
+        used, limit = self._gemini_quota_state()
+        used += 1
+        self.gemini_request_count = used
+        self._persist_ai_config()
+        self._overlay_set_gemini_quota(used, limit)
+        return used, limit
+
     def _gemini_ask(self, question):
         """Envoie une question à Gemini (déclenchée par son mot
         d'activation vocal, voir _handle_text) et pousse la conversation
@@ -4526,6 +4604,25 @@ class Api:
             reply = (
                 "[Erreur] Aucune clé API Gemini configurée. Ouvre Réglages > 🌟 IA Gemini "
                 "et renseigne ta clé (gratuite sur aistudio.google.com)."
+            )
+            self.gemini_history.append({"role": "assistant", "content": reply})
+            self._push(f"geminiReceiveMessage({json.dumps(reply)})")
+            return
+
+        used, limit = self._gemini_quota_state()
+        if used >= limit:
+            model_label = next(
+                (m["label"] for m in GEMINI_AVAILABLE_MODELS if m["id"] == self.gemini_model),
+                self.gemini_model,
+            )
+            switch_hint = (
+                " ou passe sur Gemini Flash-Lite dans les réglages (limite quotidienne plus haute)"
+                if self.gemini_model != "gemini-3.5-flash-lite" else ""
+            )
+            reply = (
+                f"[Limite atteinte] Tu as utilisé les {limit} requêtes gratuites du jour pour "
+                f"{model_label}. Le quota se réinitialise à minuit, heure du Pacifique (Californie) "
+                f"— utilise Nova (Ollama, local, illimité) en attendant{switch_hint}."
             )
             self.gemini_history.append({"role": "assistant", "content": reply})
             self._push(f"geminiReceiveMessage({json.dumps(reply)})")
@@ -4570,6 +4667,11 @@ class Api:
             headers={"Content-Type": "application/json", "x-goog-api-key": api_key},
             method="POST",
         )
+        # Comptée juste avant l'appel réel (pas avant, voir le contrôle de
+        # quota plus haut) : un compteur local ne peut de toute façon pas
+        # refléter le quota serveur au tick près, mais c'est le point le
+        # plus proche de la consommation réelle du quota Google.
+        self._gemini_record_request()
         try:
             with urllib.request.urlopen(req, timeout=30) as resp:
                 data = json.loads(resp.read().decode("utf-8"))
@@ -4628,6 +4730,8 @@ class Api:
             "gemini_name": self.gemini_name,
             "gemini_response_length": self.gemini_response_length,
             "gemini_custom_context": self.gemini_custom_context,
+            "gemini_request_count": self.gemini_request_count,
+            "gemini_request_day": self.gemini_request_day,
         })
 
     # -------------------------------------------- Surveillance du Game.log
@@ -6304,6 +6408,12 @@ class Api:
             self._overlay_push(f"overlaySetZone({json.dumps(st['zone'])})")
         if "lastCommand" in st:
             self._overlay_push(f"overlaySetLastCommand({json.dumps(st['lastCommand'])})")
+        # Calculé à la volée (pas depuis _overlay_last_state) : gère au
+        # passage la remise à zéro quotidienne du compteur si l'overlay est
+        # rouvert un autre jour sans qu'aucune requête Gemini n'ait encore
+        # été faite depuis (voir _gemini_quota_state).
+        used, limit = self._gemini_quota_state()
+        self._overlay_set_gemini_quota(used, limit)
 
     def _overlay_set_mic(self, active):
         self._overlay_last_state["mic"] = bool(active)
@@ -6337,6 +6447,13 @@ class Api:
         écrasée à chaque nouvelle exécution)."""
         self._overlay_last_state["lastCommand"] = text
         self._overlay_push(f"overlaySetLastCommand({json.dumps(text)})")
+
+    def _overlay_set_gemini_quota(self, used, limit):
+        """Barre de progression du quota gratuit Gemini du jour (RPD) —
+        vide (aucune requête), pleine (limite atteinte, voir
+        _gemini_quota_state/_gemini_record_request)."""
+        self._overlay_last_state["geminiQuota"] = {"used": used, "limit": limit}
+        self._overlay_push(f"overlaySetGeminiQuota({json.dumps(used)}, {json.dumps(limit)})")
 
     def _overlay_flash_command(self):
         """Fait clignoter le fond de l'overlay pendant 2 secondes — appelé

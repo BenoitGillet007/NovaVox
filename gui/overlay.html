@@ -136,6 +136,43 @@
     font-size: 11.5px;
   }
 
+  /* Barre de progression du quota gratuit Gemini du jour (RPD) : vide =
+     aucune requête envoyée aujourd'hui, pleine = limite quotidienne
+     atteinte (voir overlaySetGeminiQuota, appelée par Python à chaque
+     requête et à l'ouverture de l'overlay — _gemini_quota_state). */
+  .quota-bar-wrap {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex: 1;
+    min-width: 0;
+  }
+
+  .quota-bar-track {
+    flex: 1;
+    height: 6px;
+    border-radius: 3px;
+    background: rgba(255, 255, 255, 0.12);
+    overflow: hidden;
+  }
+
+  .quota-bar-fill {
+    height: 100%;
+    width: 0%;
+    background: #4ade80;
+    transition: width 0.3s ease, background-color 0.3s ease;
+  }
+
+  .quota-bar-fill.warn { background: #facc15; }
+  .quota-bar-fill.full { background: #f87171; }
+
+  .quota-bar-label {
+    flex-shrink: 0;
+    font-size: 10.5px;
+    color: #7c8a9c;
+    white-space: nowrap;
+  }
+
   #editBadge {
     position: absolute;
     top: 4px;
@@ -222,6 +259,17 @@
       <span class="icon">🎮</span>
       <span class="value off" id="lastCmdValue">—</span>
     </div>
+
+    <div class="row" id="rowGeminiQuota">
+      <input type="checkbox" class="row-toggle" id="toggle_geminiQuota" checked onchange="onRowToggleChange('geminiQuota', this.checked)">
+      <span class="icon">🌟</span>
+      <div class="quota-bar-wrap">
+        <div class="quota-bar-track">
+          <div class="quota-bar-fill" id="geminiQuotaFill"></div>
+        </div>
+        <span class="quota-bar-label" id="geminiQuotaLabel">0/0</span>
+      </div>
+    </div>
   </div>
 
   <script>
@@ -300,6 +348,23 @@
       el.className = "value " + (text ? "ok" : "off");
     }
 
+    // Barre de progression du quota gratuit Gemini du jour (RPD) — appelée
+    // par Python à chaque requête envoyée (_gemini_record_request) et à
+    // l'ouverture de l'overlay (_push_overlay_full_state). Vide = aucune
+    // requête aujourd'hui, pleine = limite quotidienne atteinte.
+    function overlaySetGeminiQuota(used, limit) {
+      const fill = document.getElementById("geminiQuotaFill");
+      const label = document.getElementById("geminiQuotaLabel");
+      if (!fill || !label) return;
+      const safeLimit = limit > 0 ? limit : 1;
+      const pct = Math.max(0, Math.min(100, (used / safeLimit) * 100));
+      fill.style.width = pct + "%";
+      fill.classList.remove("warn", "full");
+      if (used >= limit) fill.classList.add("full");
+      else if (pct >= 80) fill.classList.add("warn");
+      label.textContent = `${used}/${limit}`;
+    }
+
     // Bascule l'indicateur visuel du mode "déplacer" (le clic-traversant
     // réel est géré côté Windows par Python via SetWindowLong — ceci ne
     // fait qu'afficher/masquer le repère visuel correspondant). Le
@@ -324,6 +389,7 @@
       phrase: "phraseRow",
       zone: "rowZone",
       lastCmd: "lastCmdRow",
+      geminiQuota: "rowGeminiQuota",
     };
 
     // Appelé par Python (Api._push_overlay_full_state) à chaque (ré)
