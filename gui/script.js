@@ -123,7 +123,28 @@ async function init() {
     appendLog("[Erreur] Impossible de charger l'état initial.", "error");
   }
   checkForUpdate(); // ne bloque pas le reste de l'init (pas d'await bloquant l'UI)
+  initAiButtonsVisibility(); // pas d'await bloquant : juste affichage des boutons du haut
   setStatus("idle", "Arrêté", "Système en veille");
+}
+
+// Cache dès le lancement les boutons "Assistant IA"/"Assistant Gemini" de la
+// barre du haut pour l'assistant désactivé (voir ai_toggle_enabled /
+// gemini_toggle_enabled côté app.py) — sans ça, un assistant désactivé
+// garderait son bouton visible tant que l'utilisateur n'ouvre pas les
+// Réglages, puisque updateAiButtonVisibility/updateGeminiButtonVisibility
+// ne sont sinon appelées qu'à ce moment-là ou lors du changement de la case.
+async function initAiButtonsVisibility() {
+  try {
+    const [aiData, geminiData] = await Promise.all([
+      window.pywebview.api.ai_get_state(),
+      window.pywebview.api.gemini_get_state(),
+    ]);
+    updateAiButtonVisibility(aiData.enabled !== false);
+    updateGeminiButtonVisibility(geminiData.enabled !== false);
+  } catch (e) {
+    // Silencieux : au pire les deux boutons restent visibles, comme avant
+    // l'ajout de cette fonctionnalité.
+  }
 }
 
 async function checkForUpdate() {
@@ -259,6 +280,14 @@ function bindEvents() {
   document.getElementById("aiCooldownInput").addEventListener("change", (e) => {
     window.pywebview.api.ai_set_trigger_cooldown(e.target.value);
   });
+  document.getElementById("aiEnabledToggle").addEventListener("change", async (e) => {
+    await window.pywebview.api.ai_toggle_enabled(e.target.checked);
+    updateAiButtonVisibility(e.target.checked);
+    appendLog(
+      e.target.checked ? "🤖 Assistant Nova (Ollama) activé." : "Assistant Nova (Ollama) désactivé.",
+      "info"
+    );
+  });
   document.getElementById("gameLogToggle").addEventListener("change", onGameLogToggle);
   document.getElementById("gameLogAnnounceToggle").addEventListener("change", onGameLogAnnounceToggle);
   document.getElementById("gameLogPlayerHandleSaveBtn").addEventListener("click", onSaveGameLogPlayerHandle);
@@ -287,6 +316,14 @@ function bindEvents() {
   document.getElementById("geminiUserNameBtn").addEventListener("click", editUserName);
   document.getElementById("geminiVoiceOutputToggle").addEventListener("change", (e) => {
     window.pywebview.api.gemini_toggle_voice_output(e.target.checked);
+  });
+  document.getElementById("geminiEnabledToggle").addEventListener("change", async (e) => {
+    await window.pywebview.api.gemini_toggle_enabled(e.target.checked);
+    updateGeminiButtonVisibility(e.target.checked);
+    appendLog(
+      e.target.checked ? "🌟 Assistant Gemini activé." : "Assistant Gemini désactivé.",
+      "info"
+    );
   });
   document.getElementById("geminiApiKeyToggleBtn").addEventListener("click", () => {
     const input = document.getElementById("geminiApiKeyInput");
@@ -2389,6 +2426,15 @@ async function saveAiContext() {
 
 /* ---------------------------------------------------- Assistant IA */
 
+// Cache le bouton "🤖 Assistant IA" de la barre du haut quand Nova/Ollama
+// est désactivé (voir ai_toggle_enabled côté app.py) — évite d'ouvrir un
+// panneau pour un assistant qui ne répondra de toute façon plus au mot
+// d'activation vocal.
+function updateAiButtonVisibility(enabled) {
+  const btn = document.getElementById("openAiBtn");
+  if (btn) btn.classList.toggle("hidden", enabled === false);
+}
+
 async function openAiChat() {
   document.getElementById("aiModal").classList.remove("hidden");
   updateAiWakeDot();
@@ -2410,6 +2456,8 @@ async function openAiChat() {
 async function loadAiSettingsTab() {
   try {
     const data = await window.pywebview.api.ai_get_state();
+    document.getElementById("aiEnabledToggle").checked = data.enabled !== false;
+    updateAiButtonVisibility(data.enabled !== false);
     document.getElementById("aiConfirmCommandsToggle").checked = !!data.confirmCommands;
     document.getElementById("aiCooldownInput").value = data.triggerCooldown ?? 3.0;
     document.getElementById("aiContextInput").value = data.customContext || "";
@@ -2509,6 +2557,15 @@ async function editUserName() {
 // sa propre discussion, son propre mot d'activation, sa propre clé API. Pas
 // d'installation/téléchargement local à gérer (contrairement à Ollama) —
 // juste une clé API à renseigner dans les réglages (onglet 🌟 IA Gemini).
+
+// Cache le bouton "🌟 Assistant Gemini" de la barre du haut quand Gemini
+// est désactivé (voir gemini_toggle_enabled côté app.py) — évite d'ouvrir un
+// panneau pour un assistant qui ne répondra de toute façon plus au mot
+// d'activation vocal.
+function updateGeminiButtonVisibility(enabled) {
+  const btn = document.getElementById("openGeminiBtn");
+  if (btn) btn.classList.toggle("hidden", enabled === false);
+}
 
 async function openGeminiChat() {
   document.getElementById("geminiModal").classList.remove("hidden");
@@ -2621,6 +2678,8 @@ async function clearGeminiChat() {
 async function loadGeminiSettingsTab() {
   try {
     const data = await window.pywebview.api.gemini_get_state();
+    document.getElementById("geminiEnabledToggle").checked = data.enabled !== false;
+    updateGeminiButtonVisibility(data.enabled !== false);
     document.getElementById("geminiApiKeyInput").value = data.apiKey || "";
     document.getElementById("geminiContextInput").value = data.customContext || "";
     updateGeminiContextCount();

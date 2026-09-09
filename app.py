@@ -435,7 +435,7 @@ def _load_update_manifest_url():
 UPDATE_MANIFEST_URL = _load_update_manifest_url()
 # Repli utilisé uniquement si patch_maj.txt est absent ou ne contient
 # aucune ligne "vX.Y.Z" reconnaissable (voir get_app_version ci-dessous).
-APP_VERSION_FALLBACK = "0.2.7"
+APP_VERSION_FALLBACK = "0.2.8"
 MODEL_DIR_DEFAULT = os.path.join(BASE_DIR, "model")
 GUI_INDEX = os.path.join(RESOURCE_DIR, "gui", "index.html")
 # Fenêtre séparée, superposée à Star Citizen — PAS une injection dans le
@@ -1278,6 +1278,7 @@ def load_ai_config():
         "name": DEFAULT_AI_NAME,
         "voice": None,
         "confirm_commands": False,
+        "ai_enabled": True,
         "model": DEFAULT_OLLAMA_MODEL,
         "trigger_cooldown": DEFAULT_TRIGGER_COOLDOWN,
         "custom_context": "",
@@ -1293,6 +1294,7 @@ def load_ai_config():
         "game_log_phrases": {},
         "game_log_hud_overrides": {},
         "game_log_destination_aliases": {},
+        "gemini_enabled": True,
         "gemini_api_key": "",
         "gemini_model": DEFAULT_GEMINI_MODEL,
         "gemini_name": DEFAULT_GEMINI_NAME,
@@ -1319,6 +1321,8 @@ def load_ai_config():
             except (TypeError, ValueError):
                 config["piper_noise_scale"] = DEFAULT_PIPER_NOISE_SCALE
             config["radio_effect"] = bool(config["radio_effect"])
+            config["ai_enabled"] = bool(config.get("ai_enabled", True))
+            config["gemini_enabled"] = bool(config.get("gemini_enabled", True))
             config["game_log_enabled"] = bool(config["game_log_enabled"])
             config["game_log_announce_events"] = bool(config["game_log_announce_events"])
             config["game_log_player_handle"] = (config.get("game_log_player_handle") or "").strip()
@@ -1965,6 +1969,7 @@ class Api:
         self.ai_voice_output = True
         ai_config = load_ai_config()
         self.ai_name = ai_config["name"]
+        self.ai_enabled = bool(ai_config.get("ai_enabled", True))
         self.ai_model = ai_config["model"] or DEFAULT_OLLAMA_MODEL
         self.confirm_commands_voice = bool(ai_config["confirm_commands"])
         self.ai_custom_context = ai_config.get("custom_context", "") or ""
@@ -2052,6 +2057,7 @@ class Api:
         # entrer en conflit avec "Nova").
         self.gemini_history = []
         self.gemini_voice_output = True
+        self.gemini_enabled = bool(ai_config.get("gemini_enabled", True))
         self.gemini_api_key = ai_config.get("gemini_api_key", "") or ""
         self.gemini_model = ai_config.get("gemini_model") or DEFAULT_GEMINI_MODEL
         self.gemini_name = ai_config.get("gemini_name") or DEFAULT_GEMINI_NAME
@@ -3059,6 +3065,7 @@ class Api:
         self.last_trigger = {}
 
         self.ai_name = DEFAULT_AI_NAME
+        self.ai_enabled = True
         self.confirm_commands_voice = False
         self.ai_model = DEFAULT_OLLAMA_MODEL
         self.trigger_cooldown = DEFAULT_TRIGGER_COOLDOWN
@@ -3080,6 +3087,7 @@ class Api:
             self._game_log_watcher = None
         self.ai_history = []
         self.gemini_history = []
+        self.gemini_enabled = True
         self.gemini_api_key = ""
         self.gemini_model = DEFAULT_GEMINI_MODEL
         self.gemini_name = DEFAULT_GEMINI_NAME
@@ -3089,6 +3097,7 @@ class Api:
             "name": self.ai_name,
             "voice": self.ai_voice,
             "confirm_commands": self.confirm_commands_voice,
+            "ai_enabled": self.ai_enabled,
             "model": self.ai_model,
             "trigger_cooldown": self.trigger_cooldown,
             "custom_context": self.ai_custom_context,
@@ -3104,6 +3113,7 @@ class Api:
             "game_log_phrases": self.game_log_phrases,
             "game_log_hud_overrides": self.game_log_hud_overrides,
             "game_log_destination_aliases": self.game_log_destination_aliases,
+            "gemini_enabled": self.gemini_enabled,
             "gemini_api_key": self.gemini_api_key,
             "gemini_model": self.gemini_model,
             "gemini_name": self.gemini_name,
@@ -4326,6 +4336,7 @@ class Api:
             "history": self.ai_history,
             "voiceOutput": self.ai_voice_output,
             "name": self.ai_name,
+            "enabled": self.ai_enabled,
             "confirmCommands": self.confirm_commands_voice,
             "model": self.ai_model,
             "availableModels": AVAILABLE_MODELS,
@@ -4354,6 +4365,7 @@ class Api:
             "history": self.gemini_history,
             "voiceOutput": self.gemini_voice_output,
             "name": self.gemini_name,
+            "enabled": self.gemini_enabled,
             "apiKey": self.gemini_api_key,
             "model": self.gemini_model,
             "availableModels": GEMINI_AVAILABLE_MODELS,
@@ -4365,6 +4377,18 @@ class Api:
     def gemini_toggle_voice_output(self, enabled):
         self.gemini_voice_output = bool(enabled)
         return self.gemini_voice_output
+
+    def gemini_toggle_enabled(self, enabled):
+        """Active/désactive complètement l'assistant Gemini : plus aucune
+        détection du mot d'activation dans _handle_text tant que c'est
+        désactivé (voir gemini_wake_word là-bas). Utile pour ne garder
+        qu'un seul des deux assistants (Nova ou Gemini) actif à la fois
+        si les deux en même temps font double emploi."""
+        self.gemini_enabled = bool(enabled)
+        if not self.gemini_enabled:
+            self._gemini_awaiting_question = False
+        self._persist_ai_config()
+        return self.gemini_enabled
 
     def gemini_set_api_key(self, key):
         """Enregistre la clé API Gemini (obtenue gratuitement sur
@@ -4533,6 +4557,7 @@ class Api:
         save_ai_config({
             "name": self.ai_name,
             "confirm_commands": self.confirm_commands_voice,
+            "ai_enabled": self.ai_enabled,
             "model": self.ai_model,
             "trigger_cooldown": self.trigger_cooldown,
             "custom_context": self.ai_custom_context,
@@ -4548,6 +4573,7 @@ class Api:
             "game_log_phrases": self.game_log_phrases,
             "game_log_hud_overrides": self.game_log_hud_overrides,
             "game_log_destination_aliases": self.game_log_destination_aliases,
+            "gemini_enabled": self.gemini_enabled,
             "gemini_api_key": self.gemini_api_key,
             "gemini_model": self.gemini_model,
             "gemini_name": self.gemini_name,
@@ -5411,6 +5437,18 @@ class Api:
     def ai_toggle_voice_output(self, enabled):
         self.ai_voice_output = bool(enabled)
         return self.ai_voice_output
+
+    def ai_toggle_enabled(self, enabled):
+        """Active/désactive complètement l'assistant Nova/Ollama : plus
+        aucune détection du mot d'activation dans _handle_text tant que
+        c'est désactivé (voir wake_word là-bas). Utile pour ne garder
+        qu'un seul des deux assistants (Nova ou Gemini) actif à la fois
+        si les deux en même temps font double emploi."""
+        self.ai_enabled = bool(enabled)
+        if not self.ai_enabled:
+            self._ai_awaiting_question = False
+        self._persist_ai_config()
+        return self.ai_enabled
 
     def ai_clear_history(self):
         self.ai_history = []
@@ -6396,8 +6434,13 @@ class Api:
 
     def _handle_text(self, text, alt_texts=None):
         text_norm = text.lower().strip()
-        wake_word = self.ai_name.lower().strip()
-        gemini_wake_word = self.gemini_name.lower().strip()
+        # wake_word/gemini_wake_word vides quand l'assistant correspondant
+        # est désactivé (voir ai_toggle_enabled/gemini_toggle_enabled) :
+        # son mot d'activation n'est alors jamais détecté ci-dessous, comme
+        # s'il n'existait pas — utile pour ne garder qu'un seul des deux
+        # assistants actif si les deux en même temps font double emploi.
+        wake_word = self.ai_name.lower().strip() if self.ai_enabled else ""
+        gemini_wake_word = self.gemini_name.lower().strip() if self.gemini_enabled else ""
 
         # Étape 1 : si on attend la question suite au nom prononcé seul,
         # la phrase reconnue est envoyée telle quelle à l'IA (pas de
