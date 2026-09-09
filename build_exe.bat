@@ -135,6 +135,7 @@ echo       que --onefile pour les dependances audio/COM utilisees ici)...
     --collect-all keyboard ^
     --collect-all pygame ^
     --collect-all mouse ^
+    --collect-all tzdata ^
     %TCL_ARG% ^
     %TK_ARG% ^
     %ICON_ARG% ^
