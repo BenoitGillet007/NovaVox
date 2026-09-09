@@ -1,5 +1,8 @@
 NOVAVOX — Notes de mise à jour
 ==============================
+v0.2.9
+------
+- Assistant Gemini plus rapide à répondre : le niveau de « réflexion » interne du modèle (activé par défaut sur l'API Gemini) est désormais réduit selon la longueur de réponse choisie, au lieu de rester au niveau par défaut de l'API — c'était la principale cause de lenteur perçue sur Gemini (à ne pas confondre avec Ollama/Nova, dont la lenteur vient plutôt du matériel local).
 v0.2.8
 ------
 - Possibilité de désactiver complètement l'assistant Nova (Ollama) ou l'assistant Gemini indépendamment l'un de l'autre (case à cocher en haut de chaque onglet de réglages IA). Utile pour n'en garder qu'un seul actif : quand un assistant est désactivé, son mot d'activation vocal n'est plus détecté et son bouton disparaît de la barre du haut, évitant que les deux se chevauchent et se déclenchent en double.
