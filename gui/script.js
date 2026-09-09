@@ -104,6 +104,7 @@ async function init() {
       document.getElementById("versionBtn").textContent = looksLikeVersion ? `v${data.appVersion}` : data.appVersion;
     }
     state.voskVersion = data.voskVersion || null;
+    state.availableVoskModels = data.availableVoskModels || [];
     updateVersionTooltip(data.modelInfo);
     state.profiles = data.profiles || [];
     state.activeProfile = data.activeProfile || null;
@@ -197,6 +198,8 @@ function bindEvents() {
     if (e.target.id === "patchNotesModal") closePatchNotes();
   });
   document.getElementById("browseBtn").addEventListener("click", browseModel);
+  document.getElementById("changeVoskModelBtn").addEventListener("click", openVoskModelChange);
+  document.getElementById("closeModelSetupBtn").addEventListener("click", closeModelSetup);
   document.getElementById("resetAppBtn").addEventListener("click", onResetApp);
   document.getElementById("exportConfigBtn").addEventListener("click", onExportConfig);
   document.getElementById("importConfigBtn").addEventListener("click", onImportConfig);
@@ -1639,7 +1642,11 @@ async function onClearListenHotkey() {
 
 /* ---------------------------------------------- Configuration du modèle vocal */
 
-function openModelSetup(models) {
+// options.closable : true quand rouvert depuis Réglages (un modèle est déjà
+// installé, l'utilisateur peut annuler) — false au premier lancement, où
+// aucun modèle n'existe encore et le choix est obligatoire.
+function openModelSetup(models, options) {
+  const opts = options || {};
   const list = document.getElementById("modelChoiceList");
   list.innerHTML = "";
   models.forEach((m) => {
@@ -1654,6 +1661,12 @@ function openModelSetup(models) {
     list.appendChild(card);
   });
 
+  document.getElementById("modelSetupTitle").textContent = opts.title || "⬡ Premier lancement — Modèle vocal";
+  document.getElementById("modelSetupIntro").textContent =
+    opts.intro ||
+    "Aucun modèle de reconnaissance vocale française n'a été trouvé. Choisis celui à télécharger (une seule fois, hors-ligne ensuite) :";
+  document.getElementById("closeModelSetupBtn").classList.toggle("hidden", !opts.closable);
+
   document.getElementById("modelSetupChoice").classList.remove("hidden");
   document.getElementById("modelSetupProgress").classList.add("hidden");
   document.getElementById("modelSetupError").classList.add("hidden");
@@ -1662,6 +1675,18 @@ function openModelSetup(models) {
 
 function closeModelSetup() {
   document.getElementById("modelSetupModal").classList.add("hidden");
+}
+
+// Bouton "Changer de modèle" des Réglages (onglet NovaVox) : réutilise le
+// même panneau que le premier lancement, mais fermable puisqu'un modèle est
+// déjà installé et fonctionnel — voir download_vosk_model côté app.py, déjà
+// utilisable hors premier lancement (il remplace juste le dossier existant).
+function openVoskModelChange() {
+  openModelSetup(state.availableVoskModels || [], {
+    closable: true,
+    title: "⬡ Changer de modèle vocal",
+    intro: "Choisis le modèle à installer à la place de celui actuellement utilisé :",
+  });
 }
 
 async function startModelDownload(modelId, modelLabel) {

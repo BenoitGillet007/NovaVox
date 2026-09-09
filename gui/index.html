@@ -321,7 +321,13 @@
             <div class="input-group">
               <input id="modelPath" type="text" readonly placeholder="Sélectionnez le dossier du modèle..." />
               <button class="btn btn-ghost" id="browseBtn" type="button">Parcourir</button>
+              <button class="btn btn-ghost" id="changeVoskModelBtn" type="button">Changer de modèle</button>
             </div>
+            <p class="mic-gain-hint">
+              Télécharge un autre modèle Vosk (léger/précis) à la place de celui actuellement
+              installé. L'écoute en cours, le cas échéant, est arrêtée le temps du changement —
+              relance-la simplement une fois le nouveau modèle installé.
+            </p>
           </div>
 
           <div class="control-row">
@@ -731,11 +737,12 @@
     <div class="modal-overlay hidden" id="modelSetupModal">
       <div class="modal-panel panel">
         <div class="modal-header">
-          <h2>⬡ Premier lancement — Modèle vocal</h2>
+          <h2 id="modelSetupTitle">⬡ Premier lancement — Modèle vocal</h2>
+          <button class="icon-btn hidden" id="closeModelSetupBtn" type="button">✕</button>
         </div>
 
         <div id="modelSetupChoice">
-          <p class="model-setup-intro">
+          <p class="model-setup-intro" id="modelSetupIntro">
             Aucun modèle de reconnaissance vocale française n'a été trouvé.
             Choisis celui à télécharger (une seule fois, hors-ligne ensuite) :
           </p>

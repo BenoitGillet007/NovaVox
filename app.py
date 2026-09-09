@@ -4224,7 +4224,10 @@ class Api:
 
     def download_vosk_model(self, model_key):
         """Lance en arrière-plan le téléchargement + extraction du modèle
-        Vosk choisi par l'utilisateur (premier lancement). Progression et
+        Vosk choisi par l'utilisateur. Utilisé au premier lancement (aucun
+        modèle détecté) comme depuis Réglages > NovaVox ensuite (bouton
+        "Changer de modèle" à côté du dossier du modèle actuel), pour
+        remplacer le modèle déjà installé par un autre. Progression et
         résultat poussés vers le panneau via voskDownloadProgress /
         voskDownloadDone."""
         model = VOSK_MODELS.get(model_key)
@@ -4290,8 +4293,25 @@ class Api:
             shutil.move(extracted_model_dir, target_dir)
 
             self.model_path = target_dir
+            # Invalide le modèle Vosk déjà chargé en mémoire (voir
+            # _listen_loop) : téléchargement/large et téléchargement/small
+            # s'installent tous les deux dans le même dossier target_dir, le
+            # chemin ne change donc pas d'un modèle à l'autre — sans ça, une
+            # écoute déjà lancée dans cette session avant le changement
+            # continuerait à réutiliser l'ancien modèle en mémoire au lieu du
+            # nouveau tout juste installé sur le disque.
+            self._vosk_model = None
+            self._vosk_model_path = None
             self._push_vosk_progress(100, "Modèle installé avec succès.")
             self._log(f"Modèle « {model['label']} » installé dans {target_dir}.", "success")
+            if self.listening:
+                # L'écoute en cours utilise encore l'ancien modèle chargé en
+                # mémoire ; on l'arrête pour forcer un rechargement propre du
+                # nouveau modèle à la prochaine activation plutôt que de la
+                # laisser tourner silencieusement sur l'ancien.
+                self.stop_listening()
+                self._status("idle", "Arrêté", "Nouveau modèle installé — relance l'écoute pour l'utiliser")
+                self._log("Écoute arrêtée : relance-la pour utiliser le nouveau modèle vocal.", "info")
             self._push(f"voskDownloadDone(true, {json.dumps(target_dir)})")
         except Exception as e:
             self._log(f"[Erreur] Téléchargement du modèle Vosk : {e}", "error")
