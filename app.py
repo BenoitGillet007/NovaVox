@@ -175,6 +175,40 @@ AVAILABLE_MODELS = [
     },
 ]
 
+# --------------------------------------------------------------------------
+# Assistant IA Gemini (Google, en ligne — https://aistudio.google.com)
+# --------------------------------------------------------------------------
+# Assistant SÉPARÉ de Nova/Ollama ci-dessus (voir DEFAULT_AI_NAME) : sa
+# propre clé API, son propre historique, son propre nom d'activation
+# vocale. Contrairement à Ollama, aucune installation locale n'est
+# nécessaire — juste une clé API gratuite (quota généreux pour un usage
+# personnel) — mais les questions posées sont envoyées aux serveurs de
+# Google, contrairement à Ollama qui reste 100% local.
+GEMINI_API_BASE_URL = "https://generativelanguage.googleapis.com/v1beta"
+DEFAULT_GEMINI_MODEL = "gemini-2.5-flash"
+DEFAULT_GEMINI_NAME = "Gemini"
+# Format de requête/réponse vérifié via la documentation officielle
+# (generateContent) : POST .../models/{model}:generateContent avec l'en-tête
+# "x-goog-api-key", corps {"contents": [...], "systemInstruction": {...},
+# "generationConfig": {...}}, réponse dans candidates[0].content.parts[*].text.
+GEMINI_AVAILABLE_MODELS = [
+    {
+        "id": "gemini-2.5-flash",
+        "label": "Gemini 2.5 Flash — recommandé",
+        "description": "Rapide, gratuit avec un quota généreux pour un usage personnel, bon compromis qualité/vitesse.",
+    },
+    {
+        "id": "gemini-2.5-flash-lite",
+        "label": "Gemini 2.5 Flash-Lite — encore plus rapide",
+        "description": "Quota gratuit plus élevé et réponses plus rapides, un peu moins riches que Flash.",
+    },
+    {
+        "id": "gemini-2.0-flash",
+        "label": "Gemini 2.0 Flash — génération précédente",
+        "description": "Toujours disponible gratuitement si les modèles 2.5 ne conviennent pas.",
+    },
+]
+
 # Emplacements où chercher l'exécutable Ollama si absent du PATH (arrive
 # quand Ollama vient d'être installé sans redémarrer l'application).
 OLLAMA_FALLBACK_PATHS = [
@@ -398,7 +432,7 @@ def _load_update_manifest_url():
 UPDATE_MANIFEST_URL = _load_update_manifest_url()
 # Repli utilisé uniquement si patch_maj.txt est absent ou ne contient
 # aucune ligne "vX.Y.Z" reconnaissable (voir get_app_version ci-dessous).
-APP_VERSION_FALLBACK = "0.2.4"
+APP_VERSION_FALLBACK = "0.2.6"
 MODEL_DIR_DEFAULT = os.path.join(BASE_DIR, "model")
 GUI_INDEX = os.path.join(RESOURCE_DIR, "gui", "index.html")
 # Fenêtre séparée, superposée à Star Citizen — PAS une injection dans le
@@ -1256,6 +1290,11 @@ def load_ai_config():
         "game_log_phrases": {},
         "game_log_hud_overrides": {},
         "game_log_destination_aliases": {},
+        "gemini_api_key": "",
+        "gemini_model": DEFAULT_GEMINI_MODEL,
+        "gemini_name": DEFAULT_GEMINI_NAME,
+        "gemini_response_length": DEFAULT_RESPONSE_LENGTH,
+        "gemini_custom_context": "",
     }
     if os.path.exists(AI_CONFIG_FILE):
         try:
@@ -1286,6 +1325,12 @@ def load_ai_config():
                 config["game_log_hud_overrides"] = {}
             if not isinstance(config.get("game_log_destination_aliases"), dict):
                 config["game_log_destination_aliases"] = {}
+            config["gemini_api_key"] = (config.get("gemini_api_key") or "").strip()
+            config["gemini_model"] = (config.get("gemini_model") or "").strip() or DEFAULT_GEMINI_MODEL
+            config["gemini_name"] = (config.get("gemini_name") or "").strip() or DEFAULT_GEMINI_NAME
+            if config.get("gemini_response_length") not in RESPONSE_LENGTH_INSTRUCTIONS:
+                config["gemini_response_length"] = DEFAULT_RESPONSE_LENGTH
+            config["gemini_custom_context"] = config.get("gemini_custom_context") or ""
         except Exception:
             pass
     return config
@@ -1987,6 +2032,23 @@ class Api:
             self.trigger_cooldown = DEFAULT_TRIGGER_COOLDOWN
         self._ai_awaiting_question = False
         self._ai_awaiting_since = 0
+
+        # Assistant Gemini — voir la section "Assistant IA Gemini" en tête
+        # de fichier. Complètement séparé de Nova/Ollama ci-dessus : sa
+        # propre clé API, son propre historique de discussion, son propre
+        # nom d'activation vocale (par défaut "Gemini", pour ne jamais
+        # entrer en conflit avec "Nova").
+        self.gemini_history = []
+        self.gemini_voice_output = True
+        self.gemini_api_key = ai_config.get("gemini_api_key", "") or ""
+        self.gemini_model = ai_config.get("gemini_model") or DEFAULT_GEMINI_MODEL
+        self.gemini_name = ai_config.get("gemini_name") or DEFAULT_GEMINI_NAME
+        self.gemini_response_length = ai_config.get("gemini_response_length", DEFAULT_RESPONSE_LENGTH)
+        if self.gemini_response_length not in RESPONSE_LENGTH_INSTRUCTIONS:
+            self.gemini_response_length = DEFAULT_RESPONSE_LENGTH
+        self.gemini_custom_context = ai_config.get("gemini_custom_context", "") or ""
+        self._gemini_awaiting_question = False
+        self._gemini_awaiting_since = 0
 
         # Périphérique d'entrée (micro) sélectionné manuellement par
         # l'utilisateur. None = laisser sounddevice utiliser le périphérique
@@ -3005,6 +3067,12 @@ class Api:
             self._game_log_watcher.stop()
             self._game_log_watcher = None
         self.ai_history = []
+        self.gemini_history = []
+        self.gemini_api_key = ""
+        self.gemini_model = DEFAULT_GEMINI_MODEL
+        self.gemini_name = DEFAULT_GEMINI_NAME
+        self.gemini_response_length = DEFAULT_RESPONSE_LENGTH
+        self.gemini_custom_context = ""
         save_ai_config({
             "name": self.ai_name,
             "voice": self.ai_voice,
@@ -3024,6 +3092,11 @@ class Api:
             "game_log_phrases": self.game_log_phrases,
             "game_log_hud_overrides": self.game_log_hud_overrides,
             "game_log_destination_aliases": self.game_log_destination_aliases,
+            "gemini_api_key": self.gemini_api_key,
+            "gemini_model": self.gemini_model,
+            "gemini_name": self.gemini_name,
+            "gemini_response_length": self.gemini_response_length,
+            "gemini_custom_context": self.gemini_custom_context,
         })
 
         self.input_device_name = None
@@ -4262,6 +4335,188 @@ class Api:
             "gameLogDestinationAliases": self.game_log_destination_aliases,
         }
 
+    # ------------------------------------------------ Assistant IA Gemini
+
+    def gemini_get_state(self):
+        return {
+            "history": self.gemini_history,
+            "voiceOutput": self.gemini_voice_output,
+            "name": self.gemini_name,
+            "apiKey": self.gemini_api_key,
+            "model": self.gemini_model,
+            "availableModels": GEMINI_AVAILABLE_MODELS,
+            "customContext": self.gemini_custom_context,
+            "userName": self.user_name,
+            "responseLength": self.gemini_response_length,
+        }
+
+    def gemini_toggle_voice_output(self, enabled):
+        self.gemini_voice_output = bool(enabled)
+        return self.gemini_voice_output
+
+    def gemini_set_api_key(self, key):
+        """Enregistre la clé API Gemini (obtenue gratuitement sur
+        aistudio.google.com). Vide = efface la clé enregistrée."""
+        self.gemini_api_key = (key or "").strip()
+        self._persist_ai_config()
+        return bool(self.gemini_api_key)
+
+    def gemini_set_model(self, model_id):
+        model_id = (model_id or "").strip()
+        if not model_id:
+            return self.gemini_model
+        self.gemini_model = model_id
+        self._persist_ai_config()
+        return self.gemini_model
+
+    def gemini_set_name(self, name):
+        name = (name or "").strip()
+        if not name:
+            return self.gemini_name
+        self.gemini_name = name
+        self._persist_ai_config()
+        return self.gemini_name
+
+    def gemini_set_response_length(self, value):
+        value = (value or "").strip()
+        if value not in RESPONSE_LENGTH_INSTRUCTIONS:
+            return self.gemini_response_length
+        self.gemini_response_length = value
+        self._persist_ai_config()
+        return self.gemini_response_length
+
+    def gemini_set_custom_context(self, text):
+        self.gemini_custom_context = (text or "").strip()
+        self._persist_ai_config()
+        return self.gemini_custom_context
+
+    def gemini_clear_history(self):
+        self.gemini_history = []
+        return {"ok": True}
+
+    def gemini_check_status(self):
+        """Vérifie juste si une clé API est configurée — pas d'appel
+        réseau ici (contrairement à Ollama, pas de service local dont il
+        faut vérifier qu'il tourne), donc instantané et gratuit. Voir
+        gemini_test_connection pour un vrai test d'appel à l'API."""
+        return {"hasKey": bool((self.gemini_api_key or "").strip()), "model": self.gemini_model}
+
+    def gemini_test_connection(self):
+        """Envoie une requête minimale à Gemini pour vérifier que la clé
+        API et le modèle choisis fonctionnent réellement (bouton "Tester
+        la connexion" des réglages), sans passer par tout le flux de
+        conversation."""
+        api_key = (self.gemini_api_key or "").strip()
+        if not api_key:
+            return {"ok": False, "error": "Aucune clé API renseignée."}
+        payload = json.dumps({
+            "contents": [{"role": "user", "parts": [{"text": "Réponds juste \"ok\"."}]}],
+            "generationConfig": {"maxOutputTokens": 10},
+        }).encode("utf-8")
+        url = f"{GEMINI_API_BASE_URL}/models/{self.gemini_model}:generateContent"
+        req = urllib.request.Request(
+            url, data=payload,
+            headers={"Content-Type": "application/json", "x-goog-api-key": api_key},
+            method="POST",
+        )
+        try:
+            with urllib.request.urlopen(req, timeout=15) as resp:
+                json.loads(resp.read().decode("utf-8"))
+            return {"ok": True}
+        except urllib.error.HTTPError as e:
+            try:
+                err_body = json.loads(e.read().decode("utf-8"))
+                msg = err_body.get("error", {}).get("message", str(e))
+            except Exception:
+                msg = str(e)
+            return {"ok": False, "error": f"Erreur {e.code} : {msg}"}
+        except Exception as e:
+            return {"ok": False, "error": str(e)}
+
+    def _gemini_ask(self, question):
+        """Envoie une question à Gemini (déclenchée par son mot
+        d'activation vocal, voir _handle_text) et pousse la conversation
+        vers son panneau dédié. Miroir de _ai_ask, mais pour un historique
+        et un panneau complètement séparés de Nova/Ollama."""
+        self.gemini_history.append({"role": "user", "content": question})
+        self._push(f"geminiUserMessage({json.dumps(question)})")
+        threading.Thread(target=self._gemini_reply_thread, daemon=True).start()
+
+    def _gemini_reply_thread(self):
+        api_key = (self.gemini_api_key or "").strip()
+        if not api_key:
+            reply = (
+                "[Erreur] Aucune clé API Gemini configurée. Ouvre Réglages > 🌟 IA Gemini "
+                "et renseigne ta clé (gratuite sur aistudio.google.com)."
+            )
+            self.gemini_history.append({"role": "assistant", "content": reply})
+            self._push(f"geminiReceiveMessage({json.dumps(reply)})")
+            return
+
+        game_state_block = ""
+        if self._game_log_watcher:
+            game_state_block = game_state_to_prompt_block(self._game_log_watcher.get_state())
+
+        system_text = ai_system_prompt(
+            self.gemini_name, self.gemini_custom_context, self.user_name, self.gemini_response_length
+        ) + game_state_block
+
+        # Gemini attend tout l'historique à chaque appel (comme Ollama),
+        # mais son rôle assistant s'appelle "model", pas "assistant".
+        contents = [
+            {
+                "role": "model" if m["role"] == "assistant" else "user",
+                "parts": [{"text": m["content"]}],
+            }
+            for m in self.gemini_history
+        ]
+        max_output_tokens = self.AI_NUM_PREDICT_BY_LENGTH.get(
+            self.gemini_response_length, self.AI_NUM_PREDICT_BY_LENGTH["normal"]
+        )
+        payload = json.dumps({
+            "contents": contents,
+            "systemInstruction": {"parts": [{"text": system_text}]},
+            "generationConfig": {"maxOutputTokens": max_output_tokens, "temperature": 0.7},
+        }).encode("utf-8")
+
+        url = f"{GEMINI_API_BASE_URL}/models/{self.gemini_model}:generateContent"
+        req = urllib.request.Request(
+            url, data=payload,
+            headers={"Content-Type": "application/json", "x-goog-api-key": api_key},
+            method="POST",
+        )
+        try:
+            with urllib.request.urlopen(req, timeout=30) as resp:
+                data = json.loads(resp.read().decode("utf-8"))
+            candidates = data.get("candidates") or []
+            reply = ""
+            if candidates:
+                parts = candidates[0].get("content", {}).get("parts", [])
+                reply = "".join(p.get("text", "") for p in parts).strip()
+            if not reply:
+                reply = "(réponse vide du modèle)"
+        except urllib.error.HTTPError as e:
+            try:
+                err_body = json.loads(e.read().decode("utf-8"))
+                msg = err_body.get("error", {}).get("message", str(e))
+            except Exception:
+                msg = str(e)
+            reply = f"[Erreur] Gemini a renvoyé une erreur ({e.code}) : {msg}"
+        except TimeoutError:
+            reply = "[Erreur] Gemini n'a pas répondu en moins de 30 secondes. Réessaie."
+        except (urllib.error.URLError, OSError) as e:
+            reply = f"[Erreur] Impossible de contacter Gemini ({e}). Vérifie ta connexion internet."
+        except Exception as e:
+            reply = f"[Erreur] {e}"
+
+        self.gemini_history.append({"role": "assistant", "content": reply})
+        if len(self.gemini_history) > AI_MAX_HISTORY_MESSAGES:
+            self.gemini_history = self.gemini_history[-AI_MAX_HISTORY_MESSAGES:]
+        self._push(f"geminiReceiveMessage({json.dumps(reply)})")
+
+        if self.gemini_voice_output and "[Erreur]" not in reply:
+            self._speak(reply)
+
     def _persist_ai_config(self):
         save_ai_config({
             "name": self.ai_name,
@@ -4281,6 +4536,11 @@ class Api:
             "game_log_phrases": self.game_log_phrases,
             "game_log_hud_overrides": self.game_log_hud_overrides,
             "game_log_destination_aliases": self.game_log_destination_aliases,
+            "gemini_api_key": self.gemini_api_key,
+            "gemini_model": self.gemini_model,
+            "gemini_name": self.gemini_name,
+            "gemini_response_length": self.gemini_response_length,
+            "gemini_custom_context": self.gemini_custom_context,
         })
 
     # -------------------------------------------- Surveillance du Game.log
@@ -6125,10 +6385,14 @@ class Api:
     def _handle_text(self, text, alt_texts=None):
         text_norm = text.lower().strip()
         wake_word = self.ai_name.lower().strip()
+        gemini_wake_word = self.gemini_name.lower().strip()
 
         # Étape 1 : si on attend la question suite au nom prononcé seul,
         # la phrase reconnue est envoyée telle quelle à l'IA (pas de
-        # correspondance de commande sur cette phrase-là).
+        # correspondance de commande sur cette phrase-là). Nova d'abord,
+        # puis Gemini (voir gemini_name — les deux assistants sont
+        # complètement indépendants, un seul peut être "en attente" à la
+        # fois puisque chaque mot d'activation reprend son propre état).
         if self._ai_awaiting_question:
             self._ai_awaiting_question = False
             if time.time() - self._ai_awaiting_since > AI_QUESTION_TIMEOUT:
@@ -6141,11 +6405,25 @@ class Api:
                 self._ai_ask(text.strip())
             return
 
+        if self._gemini_awaiting_question:
+            self._gemini_awaiting_question = False
+            if time.time() - self._gemini_awaiting_since > AI_QUESTION_TIMEOUT:
+                self._log(f"({self.gemini_name} : délai dépassé, annulé)", "info")
+            elif text_norm:
+                if self._try_execute_command_from_ai_text(text.strip()):
+                    return
+                self._log(f"Question pour {self.gemini_name} : « {text.strip()} »", "info")
+                self._overlay_set_phrase(text.strip())
+                self._gemini_ask(text.strip())
+            return
+
         # Étape 2 : détection du nom de l'IA n'importe où dans la phrase
         # (pas seulement au début) — "c'est quoi le bouclier, Nova ?" ou
         # "dis-moi Nova comment ça marche" fonctionnent tous les deux.
         # Le nom est retiré de la phrase pour ne garder que la question ;
         # s'il ne reste rien, on passe en attente de la question suivante.
+        # Nova est vérifiée en premier : si jamais les deux noms sont
+        # identiques (renommage manuel malheureux), c'est elle qui gagne.
         if wake_word:
             pattern = r"(?<!\w)" + re.escape(wake_word) + r"(?!\w)"
             match = re.search(pattern, text_norm)
@@ -6162,6 +6440,24 @@ class Api:
                     self._ai_awaiting_question = True
                     self._ai_awaiting_since = time.time()
                     self._log(f"{self.ai_name} à l'écoute, pose ta question...", "info")
+                return
+
+        if gemini_wake_word:
+            pattern = r"(?<!\w)" + re.escape(gemini_wake_word) + r"(?!\w)"
+            match = re.search(pattern, text_norm)
+            if match:
+                question = (text_norm[:match.start()] + " " + text_norm[match.end():])
+                question = re.sub(r"\s+", " ", question).strip()
+                if question:
+                    if self._try_execute_command_from_ai_text(question):
+                        return
+                    self._log(f"Question pour {self.gemini_name} : « {question} »", "info")
+                    self._overlay_set_phrase(question)
+                    self._gemini_ask(question)
+                else:
+                    self._gemini_awaiting_question = True
+                    self._gemini_awaiting_since = time.time()
+                    self._log(f"{self.gemini_name} à l'écoute, pose ta question...", "info")
                 return
 
         # Étape 3 : correspondance normale des commandes vocales. Si la

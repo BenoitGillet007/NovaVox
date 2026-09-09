@@ -46,6 +46,7 @@
       </div>
       <div class="topbar-actions">
         <button id="openAiBtn" class="btn btn-ghost btn-sm" type="button">🤖 Assistant IA</button>
+        <button id="openGeminiBtn" class="btn btn-ghost btn-sm" type="button">🌟 Assistant Gemini</button>
         <button id="openGameLogBtn" class="btn btn-ghost btn-sm" type="button">🛰 Game.log</button>
         <button id="openSettingsBtn" class="icon-btn" title="Réglages (modèle vocal, microphone)">⚙️</button>
         <button id="themeToggle" class="icon-btn" title="Changer de thème">🌙</button>
@@ -193,6 +194,7 @@
         <div class="settings-tabs" id="settingsTabs">
           <button type="button" class="settings-tab-btn active" data-settings-tab="sons">🔊 Sons</button>
           <button type="button" class="settings-tab-btn" data-settings-tab="ia">🤖 IA</button>
+          <button type="button" class="settings-tab-btn" data-settings-tab="gemini">🌟 IA Gemini</button>
           <button type="button" class="settings-tab-btn" data-settings-tab="gamelog">🛰 Game.log</button>
           <button type="button" class="settings-tab-btn" data-settings-tab="divers"><img src="novavox-icon.png" class="settings-tab-icon" alt="" /> NovaVox</button>
         </div>
@@ -526,6 +528,66 @@
 
         </div>
 
+        <div class="settings-tab-panel hidden" data-settings-panel="gemini">
+
+          <div class="ai-context-section">
+            <div class="ai-context-header">
+              <label for="geminiApiKeyInput">🔑 Clé API Gemini</label>
+            </div>
+            <p class="ai-setting-desc" style="margin: -4px 0 8px;">
+              Gratuite avec un compte Google sur <strong>aistudio.google.com</strong> (Get API key).
+              Contrairement à Ollama, entièrement local, les questions posées à Gemini sont envoyées
+              aux serveurs de Google.
+            </p>
+            <div class="input-group">
+              <input type="password" id="geminiApiKeyInput" placeholder="Colle ta clé API ici" autocomplete="off" />
+              <button class="btn btn-ghost btn-sm" id="geminiApiKeyToggleBtn" type="button" title="Afficher/masquer la clé">👁</button>
+              <button class="btn btn-accent btn-sm" id="geminiApiKeySaveBtn" type="button">Enregistrer</button>
+            </div>
+            <div class="ai-settings-row" style="margin-top: 8px; align-items: center;">
+              <button class="btn btn-ghost btn-sm" id="geminiTestBtn" type="button">Tester la connexion</button>
+              <span class="ai-badge" id="geminiTestResult"></span>
+            </div>
+          </div>
+
+          <div class="ai-settings-row">
+            <div class="ai-setting">
+              <label>Modèle</label>
+              <div class="ai-setting-control">
+                <select id="geminiModelSelect"></select>
+              </div>
+              <p class="ai-setting-desc" id="geminiModelDesc"></p>
+            </div>
+            <div class="ai-setting">
+              <label>Longueur des réponses</label>
+              <div class="ai-setting-control">
+                <select id="geminiResponseLengthSelect">
+                  <option value="short">Courtes</option>
+                  <option value="normal">Normales</option>
+                  <option value="long">Détaillées</option>
+                </select>
+              </div>
+              <p class="ai-setting-desc">Une phrase ou deux, pas d'enchaînement de questions, en mode « Courtes ».</p>
+            </div>
+          </div>
+
+          <div class="ai-context-section">
+            <div class="ai-context-header">
+              <label for="geminiContextInput">📚 Connaissances personnalisées (lore, règles maison, contexte de partie...)</label>
+              <span class="ai-context-count" id="geminiContextCount">0 caractères</span>
+            </div>
+            <textarea
+              id="geminiContextInput"
+              rows="4"
+              placeholder="Colle ici tout ce que tu veux que Gemini connaisse : lore de Star Citizen, règles de ton organisation, contexte de ta campagne RP..."
+            ></textarea>
+            <div class="ai-context-actions">
+              <button class="btn btn-accent btn-sm" id="geminiContextSaveBtn" type="button">Enregistrer</button>
+            </div>
+          </div>
+
+        </div>
+
         <div class="settings-tab-panel hidden" data-settings-panel="gamelog">
 
           <div class="ai-settings-row">
@@ -713,6 +775,46 @@
         <p class="ai-setting-desc" style="margin-top: 10px;">
           ⚙️ Modèle, voix, longueur des réponses, connaissances personnalisées... : voir
           Réglages → onglet <strong>🤖 IA</strong>.
+        </p>
+      </div>
+    </div>
+
+    <div class="modal-overlay hidden" id="geminiModal">
+      <div class="modal-panel panel ai-panel">
+        <div class="modal-header">
+          <h2>🌟 <span id="geminiPanelTitle">Assistant Gemini</span> <span class="ai-badge" id="geminiStatusBadge">…</span></h2>
+          <button class="icon-btn" id="closeGeminiBtn" type="button">✕</button>
+        </div>
+
+        <div class="ai-setup hidden" id="geminiSetup">
+          <p id="geminiSetupText">Aucune clé API Gemini configurée.</p>
+          <div class="ai-setup-actions">
+            <button class="btn btn-ghost btn-sm" id="geminiRecheckBtn" type="button">Revérifier</button>
+          </div>
+        </div>
+
+        <div class="ai-wake-hint">
+          <span class="ai-wake-dot" id="geminiWakeDot"></span>
+          <span class="ai-wake-text">
+            Dis <b id="geminiWakeName">« Gemini »</b> pour lui parler · Profil : <b id="geminiUserNameDisplay">non renseigné</b>
+          </span>
+          <button class="icon-btn-sm" id="geminiRenameBtn" title="Renommer l'IA" type="button">✏️</button>
+          <button class="icon-btn-sm" id="geminiUserNameBtn" title="Indiquer ton prénom" type="button">👤</button>
+        </div>
+
+        <div class="ai-chat" id="geminiChat"></div>
+
+        <div class="modal-footer">
+          <label class="ai-voice-toggle">
+            <input type="checkbox" id="geminiVoiceOutputToggle" checked />
+            🔊 Lire les réponses à voix haute
+          </label>
+          <button class="btn btn-ghost btn-sm" id="geminiClearBtn" type="button">Effacer la discussion</button>
+        </div>
+
+        <p class="ai-setting-desc" style="margin-top: 10px;">
+          ⚙️ Clé API, modèle, longueur des réponses, connaissances personnalisées... : voir
+          Réglages → onglet <strong>🌟 IA Gemini</strong>.
         </p>
       </div>
     </div>
