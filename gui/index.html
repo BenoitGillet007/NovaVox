@@ -433,6 +433,17 @@
         <div class="settings-tab-panel hidden" data-settings-panel="ia">
 
           <div class="ai-settings-row">
+            <label class="ai-voice-toggle">
+              <input type="checkbox" id="aiEnabledToggle" checked />
+              🤖 Activer l'assistant Nova (Ollama)
+            </label>
+            <p class="ai-setting-desc">
+              Désactive-le si tu utilises plutôt l'assistant Gemini, pour éviter que les deux
+              soient actifs en même temps (mots d'activation vocale qui se chevauchent).
+            </p>
+          </div>
+
+          <div class="ai-settings-row">
             <div class="ai-setting">
               <label>Modèle</label>
               <div class="ai-setting-control">
@@ -529,6 +540,17 @@
         </div>
 
         <div class="settings-tab-panel hidden" data-settings-panel="gemini">
+
+          <div class="ai-settings-row">
+            <label class="ai-voice-toggle">
+              <input type="checkbox" id="geminiEnabledToggle" checked />
+              🌟 Activer l'assistant Gemini
+            </label>
+            <p class="ai-setting-desc">
+              Désactive-le si tu utilises plutôt Nova (Ollama), pour éviter que les deux soient
+              actifs en même temps (mots d'activation vocale qui se chevauchent).
+            </p>
+          </div>
 
           <div class="ai-context-section">
             <div class="ai-context-header">
