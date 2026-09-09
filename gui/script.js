@@ -1,4 +1,4 @@
-const state = { commands: [], listening: false, expandedSynonyms: new Set(), editingIndex: null, listenMode: "always", listenHotkey: null, listenHotkeyAvailable: true, micGateOpen: true, piperVoice: null, profiles: [], activeProfile: null, profileCycleHotkey: null, gameLogHudOverrides: {}, gameLogDestinationAliases: {} };
+const state = { commands: [], listening: false, expandedSynonyms: new Set(), editingIndex: null, listenMode: "always", listenHotkey: null, listenHotkeyAvailable: true, micGateOpen: true, piperVoice: null, profiles: [], activeProfile: null, profileCycleHotkey: null, gameLogHudOverrides: {}, gameLogDestinationAliases: {}, addExtraSteps: [], editExtraSteps: [] };
 let micGateMax = 4000; // repli avant chargement, doit correspondre à MIC_GATE_MAX_RAW côté Python
 
 function ready(fn) {
@@ -241,6 +241,11 @@ function bindEvents() {
   document.getElementById("clearListenHotkeyBtn").addEventListener("click", onClearListenHotkey);
   document.getElementById("addForm").addEventListener("submit", onAddCommand);
   document.getElementById("addTitleBtn").addEventListener("click", onAddTitle);
+  bindExtraStepsAdd(
+    document.getElementById("addExtraStepBtn"),
+    document.getElementById("addExtraStepsList"),
+    state.addExtraSteps
+  );
   document.getElementById("clearLog").addEventListener("click", () => {
     document.getElementById("logConsole").innerHTML = "";
   });
@@ -532,6 +537,53 @@ function attachCommandReorder(list) {
   });
 }
 
+// Actions supplémentaires d'une commande (jusqu'à 4, en plus de son action
+// principale — voir MAX_COMMAND_EXTRA_STEPS côté app.py) : chaque étape
+// {keys, delay} est capturée avec le même sélecteur de touches que l'action
+// principale (openKeyboard, sans les options maintien/répétition — voir
+// {showHold:false}), `steps` est mutée en place (push/splice) puisqu'elle
+// référence directement state.addExtraSteps ou state.editExtraSteps.
+function renderExtraStepsField(container, addBtn, steps) {
+  container.innerHTML = "";
+  steps.forEach((step, i) => {
+    const row = document.createElement("div");
+    row.className = "extra-step-row";
+    const display = String(step.keys || "")
+      .split("+")
+      .map((k) => keyDisplayLabel(k.trim().toLowerCase()))
+      .join(" + ");
+    row.innerHTML = `
+      <span class="extra-step-arrow">→ ${i + 2}.</span>
+      <span class="extra-step-keys">${escapeHtml(display)}</span>
+      <input type="number" class="extra-step-delay" min="0" max="10" step="0.05" value="${step.delay}" title="Délai avant cette touche (secondes)" />
+      <button type="button" class="icon-btn-sm danger" title="Retirer cette action">✕</button>
+    `;
+    row.querySelector(".extra-step-delay").addEventListener("change", (e) => {
+      const v = parseFloat(e.target.value);
+      step.delay = Number.isFinite(v) ? Math.max(0, Math.min(10, v)) : 0.3;
+    });
+    row.querySelector("button").addEventListener("click", () => {
+      steps.splice(i, 1);
+      renderExtraStepsField(container, addBtn, steps);
+    });
+    container.appendChild(row);
+  });
+  if (addBtn) {
+    addBtn.disabled = steps.length >= 4;
+    addBtn.textContent = steps.length >= 4 ? "Maximum de 5 actions atteint" : "+ Action suivante";
+  }
+}
+
+function bindExtraStepsAdd(addBtn, container, steps) {
+  addBtn.addEventListener("click", () => {
+    if (steps.length >= 4) return;
+    openKeyboard((combo) => {
+      steps.push({ keys: combo, delay: 0.3 });
+      renderExtraStepsField(container, addBtn, steps);
+    }, "", { showHold: false });
+  });
+}
+
 function renderCommands() {
   const list = document.getElementById("commandsList");
   // Filet de sécurité : toute autre cause de re-rendu de la liste (ajout
@@ -604,7 +656,7 @@ function renderCommands() {
     } else {
       main.innerHTML = `
         <span class="drag-handle" title="Cliquer pour prendre cette ligne, puis cliquer où la déposer">⠿</span>
-        <span class="keycap" title="${escapeHtml(cmd.keys)}">${escapeHtml(keysDisplay)}${cmd.hold ? ' <span class="hold-badge" title="Touche maintenue 2 secondes">⏱</span>' : ""}${(cmd.repeat_count && cmd.repeat_count > 1) ? ` <span class="hold-badge" title="Répétée ${cmd.repeat_count} fois, délai ${cmd.repeat_delay ?? 0.1}s">🔁${cmd.repeat_count}</span>` : ""}</span>
+        <span class="keycap" title="${escapeHtml(cmd.keys)}">${escapeHtml(keysDisplay)}${cmd.hold ? ' <span class="hold-badge" title="Touche maintenue 2 secondes">⏱</span>' : ""}${(cmd.repeat_count && cmd.repeat_count > 1) ? ` <span class="hold-badge" title="Répétée ${cmd.repeat_count} fois, délai ${cmd.repeat_delay ?? 0.1}s">🔁${cmd.repeat_count}</span>` : ""}${(cmd.extra_steps && cmd.extra_steps.length) ? ` <span class="hold-badge" title="${cmd.extra_steps.length} action(s) supplémentaire(s) enchaînée(s) après celle-ci">+${cmd.extra_steps.length}</span>` : ""}</span>
         <span class="command-phrase">${escapeHtml(cmd.phrase)}</span>
         ${hasSynonyms ? `
           <button class="icon-btn-sm toggle-syn" title="Afficher/masquer les synonymes" data-action="toggle-syn">
@@ -621,6 +673,21 @@ function renderCommands() {
       `;
     }
     card.appendChild(main);
+
+    if (isEditing) {
+      const extraWrap = document.createElement("div");
+      extraWrap.className = "extra-steps-field";
+      extraWrap.innerHTML = `
+        <span class="extra-steps-label">Actions supplémentaires (optionnel, max 4 de plus) :</span>
+        <div class="extra-steps-list" id="editExtraStepsList"></div>
+        <button type="button" class="btn btn-ghost btn-sm" id="editExtraStepBtn">+ Action suivante</button>
+      `;
+      card.appendChild(extraWrap);
+      const editStepsContainer = extraWrap.querySelector("#editExtraStepsList");
+      const editStepsBtn = extraWrap.querySelector("#editExtraStepBtn");
+      renderExtraStepsField(editStepsContainer, editStepsBtn, state.editExtraSteps);
+      bindExtraStepsAdd(editStepsBtn, editStepsContainer, state.editExtraSteps);
+    }
 
     if (hasSynonyms) {
       const ul = document.createElement("ul");
@@ -657,6 +724,7 @@ function renderCommands() {
         } else if (e.key === "Escape") {
           e.preventDefault();
           state.editingIndex = null;
+          state.editExtraSteps = [];
           renderCommands();
         }
       });
@@ -676,8 +744,9 @@ async function saveEditedCommand(idx) {
   const repeatCount = parseInt(keyBtn.dataset.repeatCount || "1", 10) || 1;
   const repeatDelay = parseFloat(keyBtn.dataset.repeatDelay || "0.1") || 0.1;
 
-  state.commands = await window.pywebview.api.edit_command(idx, phrase, keys, hold, repeatCount, repeatDelay);
+  state.commands = await window.pywebview.api.edit_command(idx, phrase, keys, hold, repeatCount, repeatDelay, state.editExtraSteps);
   state.editingIndex = null;
+  state.editExtraSteps = [];
   renderCommands();
 }
 
@@ -752,6 +821,7 @@ async function onCardAction(e) {
     }
   } else if (action === "edit") {
     state.editingIndex = idx;
+    state.editExtraSteps = (state.commands[idx].extra_steps || []).map((s) => ({ keys: s.keys, delay: s.delay }));
     state.expandedSynonyms.add(idx);
     renderCommands();
 } else if (action === "edit-key") {
@@ -775,6 +845,7 @@ async function onCardAction(e) {
     await saveEditedCommand(idx);
   } else if (action === "cancel-edit") {
     state.editingIndex = null;
+    state.editExtraSteps = [];
     renderCommands();
   } else if (action === "toggle-syn") {
     const ul = card.querySelector(".synonyms-list");
@@ -800,13 +871,19 @@ async function onAddCommand(e) {
   const repeatCount = parseInt(keysInput.dataset.repeatCount || "1", 10) || 1;
   const repeatDelay = parseFloat(keysInput.dataset.repeatDelay || "0.1") || 0.1;
 
-  state.commands = await window.pywebview.api.add_command(phrase, keys, hold, repeatCount, repeatDelay);
+  state.commands = await window.pywebview.api.add_command(phrase, keys, hold, repeatCount, repeatDelay, state.addExtraSteps);
   renderCommands();
   phraseInput.value = "";
   keysInput.value = "";
   keysInput.dataset.hold = "0";
   keysInput.dataset.repeatCount = "1";
   keysInput.dataset.repeatDelay = "0.1";
+  // splice (pas de réassignation "= []") : le bouton "+ Action suivante"
+  // (voir bindExtraStepsAdd dans bindEvents) référence ce même tableau
+  // dans sa fermeture — une réassignation le désynchroniserait, les clics
+  // suivants continueraient de remplir l'ancien tableau au lieu de celui-ci.
+  state.addExtraSteps.splice(0, state.addExtraSteps.length);
+  renderExtraStepsField(document.getElementById("addExtraStepsList"), document.getElementById("addExtraStepBtn"), state.addExtraSteps);
   phraseInput.focus();
 }
 
