@@ -185,27 +185,30 @@ AVAILABLE_MODELS = [
 # personnel) — mais les questions posées sont envoyées aux serveurs de
 # Google, contrairement à Ollama qui reste 100% local.
 GEMINI_API_BASE_URL = "https://generativelanguage.googleapis.com/v1beta"
-DEFAULT_GEMINI_MODEL = "gemini-2.5-flash"
+DEFAULT_GEMINI_MODEL = "gemini-3.6-flash"
 DEFAULT_GEMINI_NAME = "Gemini"
 # Format de requête/réponse vérifié via la documentation officielle
 # (generateContent) : POST .../models/{model}:generateContent avec l'en-tête
 # "x-goog-api-key", corps {"contents": [...], "systemInstruction": {...},
 # "generationConfig": {...}}, réponse dans candidates[0].content.parts[*].text.
+#
+# Modèles VÉRIFIÉS en date du 08/09/2026 : gemini-2.0-flash a été arrêté le
+# 01/06/2026, et gemini-2.5-flash a renvoyé une erreur 404 "no longer
+# available to new users" en usage réel — Google fait tourner cette gamme
+# vite. Si un futur 404 similaire apparaît, la solution est la même :
+# mettre à jour cette liste avec l'ID que Google indique dans son propre
+# message d'erreur (le plus fiable — voir gemini_test_connection), pas
+# deviner depuis la doc ou une recherche web.
 GEMINI_AVAILABLE_MODELS = [
     {
-        "id": "gemini-2.5-flash",
-        "label": "Gemini 2.5 Flash — recommandé",
+        "id": "gemini-3.6-flash",
+        "label": "Gemini 3.6 Flash — recommandé",
         "description": "Rapide, gratuit avec un quota généreux pour un usage personnel, bon compromis qualité/vitesse.",
     },
     {
-        "id": "gemini-2.5-flash-lite",
-        "label": "Gemini 2.5 Flash-Lite — encore plus rapide",
+        "id": "gemini-3.5-flash-lite",
+        "label": "Gemini 3.5 Flash-Lite — encore plus rapide",
         "description": "Quota gratuit plus élevé et réponses plus rapides, un peu moins riches que Flash.",
-    },
-    {
-        "id": "gemini-2.0-flash",
-        "label": "Gemini 2.0 Flash — génération précédente",
-        "description": "Toujours disponible gratuitement si les modèles 2.5 ne conviennent pas.",
     },
 ]
 
@@ -432,7 +435,7 @@ def _load_update_manifest_url():
 UPDATE_MANIFEST_URL = _load_update_manifest_url()
 # Repli utilisé uniquement si patch_maj.txt est absent ou ne contient
 # aucune ligne "vX.Y.Z" reconnaissable (voir get_app_version ci-dessous).
-APP_VERSION_FALLBACK = "0.2.6"
+APP_VERSION_FALLBACK = "0.2.7"
 MODEL_DIR_DEFAULT = os.path.join(BASE_DIR, "model")
 GUI_INDEX = os.path.join(RESOURCE_DIR, "gui", "index.html")
 # Fenêtre séparée, superposée à Star Citizen — PAS une injection dans le
@@ -1327,6 +1330,15 @@ def load_ai_config():
                 config["game_log_destination_aliases"] = {}
             config["gemini_api_key"] = (config.get("gemini_api_key") or "").strip()
             config["gemini_model"] = (config.get("gemini_model") or "").strip() or DEFAULT_GEMINI_MODEL
+            if config["gemini_model"] not in {m["id"] for m in GEMINI_AVAILABLE_MODELS}:
+                # Retombe sur le modèle par défaut si celui enregistré n'est
+                # plus dans la liste connue (ex. Google a retiré/renommé un
+                # modèle depuis — vérifié en usage réel : gemini-2.5-flash a
+                # fini par renvoyer une 404 "no longer available to new
+                # users") : sans ça, une config existante resterait bloquée
+                # sur un modèle mort tant que l'utilisateur n'irait pas le
+                # changer lui-même dans les réglages.
+                config["gemini_model"] = DEFAULT_GEMINI_MODEL
             config["gemini_name"] = (config.get("gemini_name") or "").strip() or DEFAULT_GEMINI_NAME
             if config.get("gemini_response_length") not in RESPONSE_LENGTH_INSTRUCTIONS:
                 config["gemini_response_length"] = DEFAULT_RESPONSE_LENGTH
