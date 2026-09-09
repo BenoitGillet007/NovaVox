@@ -435,7 +435,7 @@ def _load_update_manifest_url():
 UPDATE_MANIFEST_URL = _load_update_manifest_url()
 # Repli utilisé uniquement si patch_maj.txt est absent ou ne contient
 # aucune ligne "vX.Y.Z" reconnaissable (voir get_app_version ci-dessous).
-APP_VERSION_FALLBACK = "0.2.8"
+APP_VERSION_FALLBACK = "0.2.9"
 MODEL_DIR_DEFAULT = os.path.join(BASE_DIR, "model")
 GUI_INDEX = os.path.join(RESOURCE_DIR, "gui", "index.html")
 # Fenêtre séparée, superposée à Star Citizen — PAS une injection dans le
@@ -4447,7 +4447,14 @@ class Api:
             return {"ok": False, "error": "Aucune clé API renseignée."}
         payload = json.dumps({
             "contents": [{"role": "user", "parts": [{"text": "Réponds juste \"ok\"."}]}],
-            "generationConfig": {"maxOutputTokens": 10},
+            # thinkingLevel minimal : avec un maxOutputTokens aussi petit (10),
+            # le niveau de réflexion par défaut de l'API ("medium") peut à lui
+            # seul consommer tout le budget de tokens de sortie et renvoyer une
+            # réponse vide, alors que la clé/le modèle fonctionnent très bien.
+            "generationConfig": {
+                "maxOutputTokens": 10,
+                "thinkingConfig": {"thinkingLevel": "minimal"},
+            },
         }).encode("utf-8")
         url = f"{GEMINI_API_BASE_URL}/models/{self.gemini_model}:generateContent"
         req = urllib.request.Request(
@@ -4509,10 +4516,17 @@ class Api:
         max_output_tokens = self.AI_NUM_PREDICT_BY_LENGTH.get(
             self.gemini_response_length, self.AI_NUM_PREDICT_BY_LENGTH["normal"]
         )
+        thinking_level = self.GEMINI_THINKING_LEVEL_BY_LENGTH.get(
+            self.gemini_response_length, self.GEMINI_THINKING_LEVEL_BY_LENGTH["normal"]
+        )
         payload = json.dumps({
             "contents": contents,
             "systemInstruction": {"parts": [{"text": system_text}]},
-            "generationConfig": {"maxOutputTokens": max_output_tokens, "temperature": 0.7},
+            "generationConfig": {
+                "maxOutputTokens": max_output_tokens,
+                "temperature": 0.7,
+                "thinkingConfig": {"thinkingLevel": thinking_level},
+            },
         }).encode("utf-8")
 
         url = f"{GEMINI_API_BASE_URL}/models/{self.gemini_model}:generateContent"
@@ -5549,6 +5563,17 @@ class Api:
     # dédié à l'IA (Star Citizen occupe déjà le GPU). Valeurs généreuses
     # pour ne jamais couper une réponse légitime au milieu.
     AI_NUM_PREDICT_BY_LENGTH = {"short": 80, "normal": 300, "long": 800}
+
+    # Les modèles Gemini 3.x réfléchissent avant de répondre (thinkingLevel),
+    # ce qui ajoute une latence significative avant même le premier mot de
+    # la réponse — c'est cette étape de "réflexion" interne, invisible pour
+    # l'utilisateur, qui est la principale cause de lenteur perçue sur
+    # Gemini (contrairement à Ollama, où le goulot est le matériel local).
+    # Pour un assistant vocal de commandes courtes, un niveau réduit
+    # accélère nettement la réponse sans perte de qualité notable ; "medium"
+    # (le défaut de l'API) n'est gardé que pour les réponses longues, où un
+    # peu plus de réflexion reste utile.
+    GEMINI_THINKING_LEVEL_BY_LENGTH = {"short": "minimal", "normal": "low", "long": "medium"}
 
     def _ai_reply_thread(self):
         # GARDE-FOU : vérifie d'abord rapidement (2s max) qu'Ollama répond
