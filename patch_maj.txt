@@ -1,5 +1,9 @@
 NOVAVOX — Notes de mise à jour
 ==============================
+v0.2.6
+------
+- Nouvel assistant IA en ligne, Gemini (Google), en plus de Nova/Ollama qui reste inchangée : nouveau bouton « 🌟 Assistant Gemini » et nouvel onglet de réglages « 🌟 IA Gemini » (clé API, modèle, longueur des réponses, connaissances personnalisées). Assistant complètement indépendant, avec son propre mot d'activation vocal (« Gemini » par défaut) et sa propre discussion — utile pour des réponses plus rapides et précises que les petits modèles locaux, au prix d'une clé API gratuite (aistudio.google.com) et d'une connexion internet.
+
 v0.2.5
 ------
 - L'installateur propose désormais explicitement le choix du dossier d'installation, au lieu d'installer systématiquement dans l'emplacement par défaut sans rien demander.

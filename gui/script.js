@@ -275,6 +275,35 @@ function bindEvents() {
   document.getElementById("aiResponseLengthSelect").addEventListener("change", async (e) => {
     await window.pywebview.api.ai_set_response_length(e.target.value);
   });
+
+  document.getElementById("openGeminiBtn").addEventListener("click", openGeminiChat);
+  document.getElementById("closeGeminiBtn").addEventListener("click", closeGeminiChat);
+  document.getElementById("geminiModal").addEventListener("click", (e) => {
+    if (e.target.id === "geminiModal") closeGeminiChat();
+  });
+  document.getElementById("geminiRecheckBtn").addEventListener("click", refreshGeminiStatus);
+  document.getElementById("geminiClearBtn").addEventListener("click", clearGeminiChat);
+  document.getElementById("geminiRenameBtn").addEventListener("click", renameGemini);
+  document.getElementById("geminiUserNameBtn").addEventListener("click", editUserName);
+  document.getElementById("geminiVoiceOutputToggle").addEventListener("change", (e) => {
+    window.pywebview.api.gemini_toggle_voice_output(e.target.checked);
+  });
+  document.getElementById("geminiApiKeyToggleBtn").addEventListener("click", () => {
+    const input = document.getElementById("geminiApiKeyInput");
+    input.type = input.type === "password" ? "text" : "password";
+  });
+  document.getElementById("geminiApiKeySaveBtn").addEventListener("click", onSaveGeminiApiKey);
+  document.getElementById("geminiTestBtn").addEventListener("click", onTestGeminiConnection);
+  document.getElementById("geminiModelSelect").addEventListener("change", async (e) => {
+    await window.pywebview.api.gemini_set_model(e.target.value);
+    updateGeminiModelDesc(e.target.value);
+  });
+  document.getElementById("geminiResponseLengthSelect").addEventListener("change", async (e) => {
+    await window.pywebview.api.gemini_set_response_length(e.target.value);
+  });
+  document.getElementById("geminiContextInput").addEventListener("input", updateGeminiContextCount);
+  document.getElementById("geminiContextSaveBtn").addEventListener("click", saveGeminiContext);
+
   document.getElementById("piperInstallBtn").addEventListener("click", onPiperInstallClick);
   document.getElementById("radioEffectToggle").addEventListener("change", onRadioEffectToggle);
   document.getElementById("piperSpeedRange").addEventListener("input", onPiperSpeedInput);
@@ -775,6 +804,8 @@ function switchSettingsTab(tabName) {
   });
   if (tabName === "ia") {
     loadAiSettingsTab();
+  } else if (tabName === "gemini") {
+    loadGeminiSettingsTab();
   } else if (tabName === "gamelog") {
     loadGameLogSettingsTab();
   }
@@ -2450,9 +2481,14 @@ async function renameAi() {
 }
 
 function updateUserNameDisplay(name) {
-  const el = document.getElementById("aiUserNameDisplay");
-  if (!el) return;
-  el.textContent = name && name.trim() ? name.trim() : "prénom non renseigné";
+  // Le prénom est un réglage PARTAGÉ entre Nova et Gemini (même profil
+  // utilisateur, deux assistants distincts) — met donc à jour les deux
+  // affichages si présents, plutôt qu'un seul.
+  const text = name && name.trim() ? name.trim() : "prénom non renseigné";
+  ["aiUserNameDisplay", "geminiUserNameDisplay"].forEach((id) => {
+    const el = document.getElementById(id);
+    if (el) el.textContent = text;
+  });
 }
 
 async function editUserName() {
@@ -2464,6 +2500,197 @@ async function editUserName() {
   updateUserNameDisplay(saved);
   appendLog(
     saved ? `[Info] Prénom enregistré : « ${saved} ». L'assistant s'adressera à toi par ce prénom.` : "[Info] Prénom effacé.",
+    "info"
+  );
+}
+
+/* ------------------------------------------------------- Assistant Gemini */
+// Miroir de la section "Assistant IA" ci-dessus, mais entièrement séparé :
+// sa propre discussion, son propre mot d'activation, sa propre clé API. Pas
+// d'installation/téléchargement local à gérer (contrairement à Ollama) —
+// juste une clé API à renseigner dans les réglages (onglet 🌟 IA Gemini).
+
+async function openGeminiChat() {
+  document.getElementById("geminiModal").classList.remove("hidden");
+  updateGeminiWakeDot();
+
+  try {
+    const data = await window.pywebview.api.gemini_get_state();
+    document.getElementById("geminiChat").innerHTML = "";
+    (data.history || []).forEach((m) => appendGeminiMessage(m.role, m.content));
+    document.getElementById("geminiVoiceOutputToggle").checked = data.voiceOutput !== false;
+    updateGeminiName(data.name);
+    updateUserNameDisplay(data.userName);
+  } catch (e) {
+    // état Gemini non disponible, ignore
+  }
+
+  refreshGeminiStatus();
+}
+
+function closeGeminiChat() {
+  document.getElementById("geminiModal").classList.add("hidden");
+}
+
+function updateGeminiWakeDot() {
+  const dot = document.getElementById("geminiWakeDot");
+  if (dot) dot.classList.toggle("active", state.listening);
+}
+
+async function refreshGeminiStatus() {
+  const badge = document.getElementById("geminiStatusBadge");
+  const setup = document.getElementById("geminiSetup");
+  const setupText = document.getElementById("geminiSetupText");
+
+  const status = await window.pywebview.api.gemini_check_status();
+
+  if (!status.hasKey) {
+    badge.textContent = "clé manquante";
+    badge.className = "ai-badge offline";
+    setup.classList.remove("hidden");
+    setupText.innerHTML =
+      "Aucune clé API Gemini configurée. Ouvre Réglages → onglet <strong>🌟 IA Gemini</strong> pour en renseigner une " +
+      "(gratuite sur aistudio.google.com).";
+    return;
+  }
+
+  badge.textContent = `prêt · ${status.model}`;
+  badge.className = "ai-badge ready";
+  setup.classList.add("hidden");
+}
+
+function updateGeminiName(name) {
+  if (!name) return;
+  document.getElementById("geminiPanelTitle").textContent = `Assistant Gemini (${name})`;
+  document.getElementById("geminiWakeName").textContent = `« ${name} »`;
+}
+
+async function renameGemini() {
+  const current = document.getElementById("geminiWakeName").textContent.replace(/[«»\s]/g, "");
+  const next = prompt("Quel nom veux-tu donner à l'assistant Gemini ?", current);
+  if (next && next.trim()) {
+    const newName = await window.pywebview.api.gemini_set_name(next.trim());
+    updateGeminiName(newName);
+    appendLog(`[Info] L'assistant Gemini s'appelle maintenant « ${newName} ».`, "info");
+  }
+}
+
+function appendGeminiMessage(role, content, pending) {
+  const chat = document.getElementById("geminiChat");
+  const bubble = document.createElement("div");
+  bubble.className = "ai-msg " + (pending ? "pending" : role);
+  bubble.textContent = content;
+  chat.appendChild(bubble);
+  chat.scrollTop = chat.scrollHeight;
+  return bubble;
+}
+
+let geminiPendingBubble = null;
+
+// Appelé par Python dès que le mot d'activation Gemini + une question ont
+// été reconnus (voir _gemini_ask côté app.py).
+function geminiUserMessage(text) {
+  appendGeminiMessage("user", text);
+  geminiPendingBubble = appendGeminiMessage("assistant", "…réflexion…", true);
+
+  const modal = document.getElementById("geminiModal");
+  if (modal.classList.contains("hidden")) {
+    modal.classList.remove("hidden");
+    updateGeminiWakeDot();
+    refreshGeminiStatus();
+  }
+}
+
+// Appelé par Python quand la réponse de Gemini est prête.
+function geminiReceiveMessage(text) {
+  if (geminiPendingBubble) {
+    geminiPendingBubble.classList.remove("pending");
+    geminiPendingBubble.classList.add("assistant");
+    geminiPendingBubble.textContent = text;
+    geminiPendingBubble = null;
+  } else {
+    appendGeminiMessage("assistant", text);
+  }
+}
+
+async function clearGeminiChat() {
+  await window.pywebview.api.gemini_clear_history();
+  document.getElementById("geminiChat").innerHTML = "";
+}
+
+async function loadGeminiSettingsTab() {
+  try {
+    const data = await window.pywebview.api.gemini_get_state();
+    document.getElementById("geminiApiKeyInput").value = data.apiKey || "";
+    document.getElementById("geminiContextInput").value = data.customContext || "";
+    updateGeminiContextCount();
+    document.getElementById("geminiResponseLengthSelect").value = data.responseLength || "normal";
+    loadGeminiModelOptions(data.availableModels || [], data.model);
+    document.getElementById("geminiTestResult").textContent = "";
+    document.getElementById("geminiTestResult").className = "ai-badge";
+  } catch (e) {
+    // état Gemini non disponible, ignore
+  }
+}
+
+function loadGeminiModelOptions(models, selectedModel) {
+  const select = document.getElementById("geminiModelSelect");
+  select.innerHTML = "";
+  models.forEach((m) => {
+    const opt = document.createElement("option");
+    opt.value = m.id;
+    opt.textContent = m.label;
+    opt.dataset.description = m.description || "";
+    select.appendChild(opt);
+  });
+  select.value = selectedModel || (models[0] && models[0].id) || "";
+  updateGeminiModelDesc(select.value);
+}
+
+function updateGeminiModelDesc(modelId) {
+  const select = document.getElementById("geminiModelSelect");
+  const opt = [...select.options].find((o) => o.value === modelId);
+  const desc = opt ? opt.dataset.description : "";
+  document.getElementById("geminiModelDesc").textContent = modelId ? `${desc} (${modelId})` : desc;
+}
+
+async function onSaveGeminiApiKey() {
+  const input = document.getElementById("geminiApiKeyInput");
+  const hasKey = await window.pywebview.api.gemini_set_api_key(input.value.trim());
+  appendLog(
+    hasKey ? "[Info] Clé API Gemini enregistrée." : "[Info] Clé API Gemini effacée.",
+    "info"
+  );
+  refreshGeminiStatus();
+}
+
+async function onTestGeminiConnection() {
+  const result = document.getElementById("geminiTestResult");
+  result.textContent = "test en cours...";
+  result.className = "ai-badge checking";
+  const res = await window.pywebview.api.gemini_test_connection();
+  if (res.ok) {
+    result.textContent = "✅ connexion OK";
+    result.className = "ai-badge ready";
+  } else {
+    result.textContent = `❌ ${res.error || "échec"}`;
+    result.className = "ai-badge offline";
+  }
+}
+
+function updateGeminiContextCount() {
+  const val = document.getElementById("geminiContextInput").value;
+  const el = document.getElementById("geminiContextCount");
+  if (el) el.textContent = `${val.length} caractères`;
+}
+
+async function saveGeminiContext() {
+  const val = document.getElementById("geminiContextInput").value.trim();
+  const saved = await window.pywebview.api.gemini_set_custom_context(val);
+  document.getElementById("geminiContextInput").value = saved;
+  updateGeminiContextCount();
+  appendLog(
+    saved ? "Connaissances personnalisées enregistrées pour Gemini." : "Connaissances personnalisées Gemini effacées.",
     "info"
   );
 }
