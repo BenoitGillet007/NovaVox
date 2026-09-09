@@ -751,6 +751,21 @@
       </div>
     </div>
 
+    <!-- Affichée avant modelSetupModal, uniquement au tout premier lancement
+         (voir openLanguageSetup dans script.js) : aucun texte d'instruction
+         traduit ici, seulement le nom de chaque langue dans elle-même (ex.
+         "Deutsch"), puisqu'on ne sait pas encore laquelle l'utilisateur
+         comprend à ce stade. Pas de bouton de fermeture, comme
+         modelSetupModal au premier lancement : le choix est obligatoire. -->
+    <div class="modal-overlay hidden" id="languageSetupModal">
+      <div class="modal-panel panel">
+        <div class="modal-header">
+          <h2>⬡ Français / English / Nederlands / Español / Italiano / Deutsch</h2>
+        </div>
+        <div class="model-choice-list" id="languageChoiceList"></div>
+      </div>
+    </div>
+
     <div class="modal-overlay hidden" id="modelSetupModal">
       <div class="modal-panel panel">
         <div class="modal-header">
