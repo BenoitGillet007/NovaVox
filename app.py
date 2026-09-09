@@ -7700,6 +7700,25 @@ def set_star_citizen_autolaunch_enabled(enabled):
         return False
 
 
+def _refresh_star_citizen_autolaunch_shortcut():
+    """Si le raccourci de veille Star Citizen (voir
+    set_star_citizen_autolaunch_enabled) est déjà activé, le recrée avec
+    le chemin ACTUEL de l'exécutable. Sans ça, un raccourci créé avant un
+    changement de dossier d'installation (ex. une mise à jour installée
+    dans un autre dossier — l'installeur propose désormais explicitement
+    ce choix, voir installer.iss/DisableDirPage) reste pointé vers un
+    .exe qui n'existe plus : NovaVox ne se relance alors plus jamais tout
+    seul au démarrage de Star Citizen, sans aucune erreur visible (la
+    case reste cochée dans Réglages, le fichier .lnk existe toujours).
+    Appelée en arrière-plan à chaque lancement normal de l'appli (voir
+    main()), jamais en mode --wait-for-sc où il n'y a rien à corriger."""
+    try:
+        if is_star_citizen_autolaunch_enabled():
+            set_star_citizen_autolaunch_enabled(True)
+    except Exception:
+        pass
+
+
 def _wait_for_star_citizen_if_requested():
     """Si l'appli a été lancée avec --wait-for-sc (raccourci de veille
     créé par set_star_citizen_autolaunch_enabled), reste en veille
@@ -8315,6 +8334,7 @@ def main():
 
     # En arrière-plan pour ne pas retarder le démarrage.
     threading.Thread(target=ensure_desktop_shortcut, daemon=True).start()
+    threading.Thread(target=_refresh_star_citizen_autolaunch_shortcut, daemon=True).start()
 
     # Taille ET position de fenêtre mémorisées à la dernière fermeture/
     # déplacement (voir save_window_config) ; repli sur la taille par
