@@ -1369,6 +1369,20 @@ body {
   color: var(--text);
 }
 .piper-voice-row.active .piper-voice-label { color: var(--accent); font-weight: 600; }
+.piper-voice-lang {
+  display: inline-block;
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  font-weight: 700;
+  color: var(--muted);
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 1px 4px;
+  margin-right: 2px;
+  letter-spacing: 0.02em;
+}
+.piper-voice-row.active .piper-voice-lang { color: var(--accent); border-color: var(--accent); }
 .piper-voice-actions { display: flex; gap: 6px; flex-shrink: 0; }
 .piper-voice-progress {
   flex-basis: 100%;
