@@ -46,7 +46,6 @@
         </div>
       </div>
       <div class="topbar-actions">
-        <button id="openAiBtn" class="btn btn-ghost btn-sm" type="button" data-i18n="topbar.ai">🤖 Assistant IA</button>
         <button id="openGeminiBtn" class="btn btn-ghost btn-sm" type="button" data-i18n="topbar.gemini">🌟 Assistant Gemini</button>
         <button id="openGameLogBtn" class="btn btn-ghost btn-sm" type="button" data-i18n="topbar.gamelog">🛰 Game.log</button>
         <button id="openSettingsBtn" class="icon-btn" title="Réglages (modèle vocal, microphone)" data-i18n-title="topbar.settingsTitle">⚙️</button>
@@ -199,7 +198,6 @@
 
         <div class="settings-tabs" id="settingsTabs">
           <button type="button" class="settings-tab-btn active" data-settings-tab="sons" data-i18n="settings.tab.sons">🔊 Sons</button>
-          <button type="button" class="settings-tab-btn" data-settings-tab="ia" data-i18n="settings.tab.ia">🤖 IA</button>
           <button type="button" class="settings-tab-btn" data-settings-tab="gemini" data-i18n="settings.tab.gemini">🌟 IA Gemini</button>
           <button type="button" class="settings-tab-btn" data-settings-tab="gamelog" data-i18n="settings.tab.gamelog">🛰 Game.log</button>
           <button type="button" class="settings-tab-btn" data-settings-tab="divers"><img src="novavox-icon.png" class="settings-tab-icon" alt="" /> NovaVox</button>
@@ -442,122 +440,9 @@
               commandes/réglages aux valeurs par défaut. Le programme lui-même n'est
               PAS supprimé, mais l'application se ferme à la fin.
             </p>
-            <label class="ai-voice-toggle">
-              <input type="checkbox" id="resetRemoveOllamaCheck" checked />
-              Désinstaller aussi Ollama et les modèles IA téléchargés
-            </label>
             <button class="btn btn-ghost btn-sm danger" id="resetAppBtn" type="button">
               🔄 Réinitialiser l'application
             </button>
-          </div>
-
-        </div>
-
-        <div class="settings-tab-panel hidden" data-settings-panel="ia">
-
-          <div class="ai-settings-row">
-            <label class="ai-voice-toggle">
-              <input type="checkbox" id="aiEnabledToggle" checked />
-              🤖 Activer l'assistant Nova (Ollama)
-            </label>
-            <p class="ai-setting-desc">
-              Désactive-le si tu utilises plutôt l'assistant Gemini, pour éviter que les deux
-              soient actifs en même temps (mots d'activation vocale qui se chevauchent).
-            </p>
-          </div>
-
-          <div class="ai-settings-row">
-            <div class="ai-setting">
-              <label>Modèle</label>
-              <div class="ai-setting-control">
-                <select id="aiModelSelect"></select>
-                <button class="btn btn-ghost btn-sm danger" id="aiUninstallBtn" title="Désinstaller ce modèle" type="button">🗑</button>
-              </div>
-              <p class="ai-setting-desc" id="aiModelDesc"></p>
-            </div>
-            <div class="ai-setting">
-              <label>Longueur des réponses</label>
-              <div class="ai-setting-control">
-                <select id="aiResponseLengthSelect">
-                  <option value="short">Courtes</option>
-                  <option value="normal">Normales</option>
-                  <option value="long">Détaillées</option>
-                </select>
-              </div>
-              <p class="ai-setting-desc">Une phrase ou deux, pas d'enchaînement de questions, en mode « Courtes ».</p>
-            </div>
-          </div>
-
-          <div class="ai-voice-engine-section">
-            <label>🗣️ Moteur vocal — Piper</label>
-            <p class="ai-setting-desc">
-              Piper est un moteur de synthèse neuronal, hors-ligne, aux voix naturelles — à
-              télécharger une fois (~50-100 Mo par voix).
-            </p>
-
-            <label class="ai-voice-toggle" style="margin: 10px 0 4px;">
-              <input type="checkbox" id="radioEffectToggle" />
-              🛰️ Effet « communication vaisseau » (filtre radio léger, s'applique aux deux moteurs)
-            </label>
-
-            <div id="piperPanel" class="piper-panel">
-              <div id="piperNotInstalled">
-                <p class="ai-setting-desc">Le moteur Piper n'est pas encore installé sur ce PC.</p>
-                <button class="btn btn-accent btn-sm" id="piperInstallBtn" type="button">📥 Installer Piper</button>
-                <div class="ai-pull-log hidden" id="piperInstallLog"></div>
-              </div>
-              <div id="piperTuning" class="piper-tuning hidden">
-                <div class="piper-tuning-row">
-                  <label for="piperSpeedRange">
-                    Vitesse <span class="mic-gain-value" id="piperSpeedValue">1.00×</span>
-                  </label>
-                  <input type="range" id="piperSpeedRange" min="0.7" max="1.5" step="0.05" value="1.0" />
-                </div>
-                <div class="piper-tuning-row">
-                  <label for="piperExpressivenessRange">
-                    Expressivité <span class="mic-gain-value" id="piperExpressivenessValue">0.67</span>
-                  </label>
-                  <input type="range" id="piperExpressivenessRange" min="0.1" max="1.2" step="0.05" value="0.667" />
-                </div>
-                <p class="ai-setting-desc">
-                  Vitesse basse + expressivité basse = voix plus rapide et monotone, effet
-                  « ordinateur de bord ». Valeurs hautes = voix plus naturelle et posée. Le
-                  périphérique de sortie et le volume de la voix se règlent maintenant dans
-                  Réglages → onglet <strong>🔊 Sons</strong>.
-                </p>
-              </div>
-              <div id="piperVoiceList" class="piper-voice-list hidden"></div>
-            </div>
-          </div>
-
-          <div class="ai-settings-row">
-            <label class="ai-voice-toggle">
-              <input type="checkbox" id="aiConfirmCommandsToggle" />
-              ✅ Confirmer les commandes à voix haute
-            </label>
-            <label class="ai-voice-toggle" title="Délai minimum avant de pouvoir redéclencher la même commande. Augmente cette valeur si une commande se déclenche plusieurs fois de suite sans que tu l'aies redite.">
-              ⏱ Anti-répétition (s) :
-              <input type="number" id="aiCooldownInput" min="0.5" max="10" step="0.5" style="width:56px" />
-            </label>
-          </div>
-
-          <div class="ai-context-section">
-            <div class="ai-context-header">
-              <label for="aiContextInput">📚 Connaissances personnalisées (lore, règles maison, contexte de partie...)</label>
-              <span class="ai-context-count" id="aiContextCount">0 caractères</span>
-            </div>
-            <textarea
-              id="aiContextInput"
-              rows="4"
-              placeholder="Colle ici tout ce que tu veux que l'assistant connaisse : lore de Star Citizen, règles de ton organisation, contexte de ta campagne RP..."
-            ></textarea>
-            <div class="ai-context-actions">
-              <button class="btn btn-accent btn-sm" id="aiContextSaveBtn" type="button">Enregistrer</button>
-              <span class="ai-context-hint">
-                Reste raisonnable (quelques milliers de caractères) : un texte trop long ralentit les
-                réponses ou peut être partiellement ignoré par un modèle léger.
-              </span>
-            </div>
           </div>
 
         </div>
@@ -569,10 +454,6 @@
               <input type="checkbox" id="geminiEnabledToggle" checked />
               🌟 Activer l'assistant Gemini
             </label>
-            <p class="ai-setting-desc">
-              Désactive-le si tu utilises plutôt Nova (Ollama), pour éviter que les deux soient
-              actifs en même temps (mots d'activation vocale qui se chevauchent).
-            </p>
           </div>
 
           <div class="ai-context-section">
@@ -580,9 +461,19 @@
               <label for="geminiApiKeyInput">🔑 Clé API Gemini</label>
             </div>
             <p class="ai-setting-desc" style="margin: -4px 0 8px;">
-              Gratuite avec un compte Google sur <strong>aistudio.google.com</strong> (Get API key).
-              Contrairement à Ollama, entièrement local, les questions posées à Gemini sont envoyées
-              aux serveurs de Google.
+              <a href="https://aistudio.google.com/app/apikey" target="_blank">🔗 Obtenir une clé API gratuite sur aistudio.google.com</a>
+            </p>
+            <p class="ai-setting-desc" style="margin: -4px 0 8px;">
+              Cette clé est celle de <strong>ton propre compte Google</strong> — elle t'identifie
+              directement auprès de Google. NovaVox l'utilise uniquement pour envoyer tes
+              questions depuis ce PC directement aux serveurs de Google ; elle ne transite par
+              aucun serveur NovaVox et n'est jamais partagée.
+            </p>
+            <p class="ai-setting-desc" style="margin: -4px 0 8px; color: var(--danger);">
+              ⚠️ Les questions posées à Gemini sont envoyées aux serveurs de Google, qui peut
+              conserver certaines informations selon sa propre politique de confidentialité. Ne
+              communique jamais d'information sensible (identifiants, données personnelles,
+              coordonnées...) à l'assistant.
             </p>
             <div class="input-group">
               <input type="password" id="geminiApiKeyInput" placeholder="Colle ta clé API ici" autocomplete="off" />
@@ -614,6 +505,59 @@
               </div>
               <p class="ai-setting-desc">Une phrase ou deux, pas d'enchaînement de questions, en mode « Courtes ».</p>
             </div>
+          </div>
+
+          <div class="ai-voice-engine-section">
+            <label>🗣️ Moteur vocal — Piper</label>
+            <p class="ai-setting-desc">
+              Piper est un moteur de synthèse neuronal, hors-ligne, aux voix naturelles — à
+              télécharger une fois (~50-100 Mo par voix).
+            </p>
+
+            <label class="ai-voice-toggle" style="margin: 10px 0 4px;">
+              <input type="checkbox" id="radioEffectToggle" />
+              🛰️ Effet « communication vaisseau » (filtre radio léger)
+            </label>
+
+            <div id="piperPanel" class="piper-panel">
+              <div id="piperNotInstalled">
+                <p class="ai-setting-desc">Le moteur Piper n'est pas encore installé sur ce PC.</p>
+                <button class="btn btn-accent btn-sm" id="piperInstallBtn" type="button">📥 Installer Piper</button>
+                <div class="ai-pull-log hidden" id="piperInstallLog"></div>
+              </div>
+              <div id="piperTuning" class="piper-tuning hidden">
+                <div class="piper-tuning-row">
+                  <label for="piperSpeedRange">
+                    Vitesse <span class="mic-gain-value" id="piperSpeedValue">1.00×</span>
+                  </label>
+                  <input type="range" id="piperSpeedRange" min="0.7" max="1.5" step="0.05" value="1.0" />
+                </div>
+                <div class="piper-tuning-row">
+                  <label for="piperExpressivenessRange">
+                    Expressivité <span class="mic-gain-value" id="piperExpressivenessValue">0.67</span>
+                  </label>
+                  <input type="range" id="piperExpressivenessRange" min="0.1" max="1.2" step="0.05" value="0.667" />
+                </div>
+                <p class="ai-setting-desc">
+                  Vitesse basse + expressivité basse = voix plus rapide et monotone, effet
+                  « ordinateur de bord ». Valeurs hautes = voix plus naturelle et posée. Le
+                  périphérique de sortie et le volume de la voix se règlent dans
+                  Réglages → onglet <strong>🔊 Sons</strong>.
+                </p>
+              </div>
+              <div id="piperVoiceList" class="piper-voice-list hidden"></div>
+            </div>
+          </div>
+
+          <div class="ai-settings-row">
+            <label class="ai-voice-toggle">
+              <input type="checkbox" id="aiConfirmCommandsToggle" />
+              ✅ Confirmer les commandes à voix haute
+            </label>
+            <label class="ai-voice-toggle" title="Délai minimum avant de pouvoir redéclencher la même commande. Augmente cette valeur si une commande se déclenche plusieurs fois de suite sans que tu l'aies redite.">
+              ⏱ Anti-répétition (s) :
+              <input type="number" id="aiCooldownInput" min="0.5" max="10" step="0.5" style="width:56px" />
+            </label>
           </div>
 
           <div class="ai-context-section">
@@ -793,50 +737,6 @@
         </div>
 
         <div id="modelSetupError" class="model-setup-error hidden"></div>
-      </div>
-    </div>
-
-    <div class="modal-overlay hidden" id="aiModal">
-      <div class="modal-panel panel ai-panel">
-        <div class="modal-header">
-          <h2>🤖 <span id="aiPanelTitle">Assistant IA</span> <span class="ai-badge" id="aiStatusBadge">…</span></h2>
-          <button class="icon-btn" id="closeAiBtn" type="button">✕</button>
-        </div>
-
-        <div class="ai-setup hidden" id="aiSetup">
-          <p id="aiSetupText">Vérification d'Ollama...</p>
-          <div class="ai-setup-actions">
-            <button class="btn btn-ghost btn-sm" id="aiRecheckBtn" type="button">Revérifier</button>
-            <button class="btn btn-accent btn-sm hidden" id="aiInstallOllamaBtn" type="button">📥 Installer Ollama</button>
-            <button class="btn btn-accent btn-sm hidden" id="aiPullBtn" type="button">Télécharger le modèle</button>
-          </div>
-          <div class="ai-pull-log hidden" id="aiInstallOllamaLog"></div>
-          <div class="ai-pull-log hidden" id="aiPullLog"></div>
-        </div>
-
-        <div class="ai-wake-hint">
-          <span class="ai-wake-dot" id="aiWakeDot"></span>
-          <span class="ai-wake-text">
-            Dis <b id="aiWakeName">« Nova »</b> pour lui parler · Profil : <b id="aiUserNameDisplay">non renseigné</b>
-          </span>
-          <button class="icon-btn-sm" id="aiRenameBtn" title="Renommer l'IA" type="button">✏️</button>
-          <button class="icon-btn-sm" id="aiUserNameBtn" title="Indiquer ton prénom" type="button">👤</button>
-        </div>
-
-        <div class="ai-chat" id="aiChat"></div>
-
-        <div class="modal-footer">
-          <label class="ai-voice-toggle">
-            <input type="checkbox" id="aiVoiceOutputToggle" checked />
-            🔊 Lire les réponses à voix haute
-          </label>
-          <button class="btn btn-ghost btn-sm" id="aiClearBtn" type="button">Effacer la discussion</button>
-        </div>
-
-        <p class="ai-setting-desc" style="margin-top: 10px;">
-          ⚙️ Modèle, voix, longueur des réponses, connaissances personnalisées... : voir
-          Réglages → onglet <strong>🤖 IA</strong>.
-        </p>
       </div>
     </div>
 

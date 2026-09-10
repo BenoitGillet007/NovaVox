@@ -30,20 +30,21 @@ basculer un bouclier.
     bouton de manette/joystick) active ou coupe le micro.
   - *Push-to-talk* : le micro n'est transmis que pendant que la touche
     est maintenue enfoncée.
-- **Nova, l'assistante IA embarquée (optionnelle)** : un mot
-  d'activation ("Nova, ...") te permet de poser une question ou de
-  discuter, propulsée par un modèle de langage tournant 100% en local et
-  gratuitement. Personnalisable : nom de l'IA, ton prénom, longueur des
-  réponses, et un contexte libre (lore de ta partie, règles maison...).
+- **Gemini, l'assistante IA embarquée (optionnelle)** : un mot
+  d'activation ("Gemini, ...") te permet de poser une question ou de
+  discuter, propulsée par l'API Gemini de Google (gratuite, avec ta
+  propre clé API). Personnalisable : nom de l'IA, ton prénom, longueur
+  des réponses, et un contexte libre (lore de ta partie, règles
+  maison...).
 - **Voix naturelle (optionnelle)** : synthèse vocale neuronale, locale et
   gratuite, avec plusieurs voix françaises au choix, réglables en
   vitesse et en expressivité, avec un effet optionnel "communication
   radio de vaisseau". Périphérique de sortie et volume de la voix
   réglables indépendamment du volume système.
 - **Overlay en jeu (optionnel)** : petite fenêtre superposée à Star
-  Citizen affichant l'état du micro, la dernière phrase reconnue, le
-  statut de Nova et la zone actuelle. Déplaçable librement, clics
-  traversants une fois verrouillée.
+  Citizen affichant l'état du micro, la dernière phrase reconnue et la
+  zone actuelle. Déplaçable librement, clics traversants une fois
+  verrouillée.
 - **Surveillance du journal de jeu (Game.log)** : annonce à voix haute
   les changements de zone, et corrige certains éléments d'affichage du
   HUD en temps réel.
@@ -52,7 +53,7 @@ basculer un bouclier.
   un profil exploration) via un raccourci clavier ou un bouton de
   manette/joystick.
 - **Annulation d'écho (expérimentale)** : réduit le risque que la voix
-  de Nova, captée par ton micro, soit reconnue par erreur comme une
+  de l'IA, captée par ton micro, soit reconnue par erreur comme une
   commande.
 - **Lancement automatique avec Star Citizen (optionnel)** : une fois
   activé dans les Réglages, NovaVox s'ouvre tout seul dès que le jeu
@@ -147,18 +148,22 @@ Dans le même onglet, tu peux aussi régler : le périphérique et le volume
 de sortie de la voix, le micro utilisé, l'amplification et le seuil de
 sensibilité du micro, et activer l'annulation d'écho expérimentale.
 
-## Activer l'assistante IA Nova (optionnel)
+## Activer l'assistante IA Gemini (optionnel)
 
-Nova peut répondre à tes questions à voix haute pendant que tu joues.
-Dans Réglages > 🤖 IA, un bouton te guide pour l'installer (téléchargement
-automatique du moteur nécessaire). Une fois installée :
+Gemini peut répondre à tes questions à voix haute pendant que tu joues,
+grâce à l'API Gemini de Google. Dans Réglages > 🌟 IA Gemini, renseigne
+une clé API (gratuite, générée sur ton propre compte Google via le lien
+fourni dans les réglages). Une fois configurée :
 
-- Dis **"Nova"** suivi de ta question
+- Dis **"Gemini"** suivi de ta question
 - Personnalise son nom, ton propre prénom, la longueur de ses réponses,
   et donne-lui des informations sur ta partie qu'elle utilisera dans ses
   réponses
 - Active une **voix naturelle** (plusieurs voix françaises au choix) et
   un effet "radio de vaisseau" si tu veux
+
+Comme les questions posées transitent par les serveurs de Google,
+évite de lui communiquer des informations sensibles.
 
 Cette fonctionnalité est entièrement optionnelle : NovaVox fonctionne
 très bien pour les commandes vocales seules, sans jamais l'activer.
@@ -167,9 +172,9 @@ très bien pour les commandes vocales seules, sans jamais l'activer.
 
 Dans Réglages > ⬡ NovaVox, active "Overlay en jeu" pour afficher une
 petite fenêtre par-dessus Star Citizen : état du micro, dernière phrase
-reconnue, statut de Nova, zone actuelle. Clique sur "Déplacer l'overlay"
-pour la repositionner où tu veux, puis reclique pour la reverrouiller
-(les clics traversent alors l'overlay jusqu'au jeu en dessous).
+reconnue, zone actuelle. Clique sur "Déplacer l'overlay" pour la
+repositionner où tu veux, puis reclique pour la reverrouiller (les
+clics traversent alors l'overlay jusqu'au jeu en dessous).
 
 ## Zones et HUD (Game.log)
 
@@ -219,10 +224,9 @@ NovaVox tout seul dès qu'elle détecte le jeu lancé.
 - **Erreur au démarrage de l'audio** → vérifie qu'un micro est bien
   sélectionné par défaut dans les paramètres Windows (Son > Entrée), ou
   choisis-le manuellement dans les Réglages de NovaVox.
-- **L'assistante Nova ne répond pas** → vérifie qu'elle est bien
-  installée (panneau IA > Revérifier) et que le modèle IA choisi est
-  téléchargé.
-- **Nova se déclenche en entendant sa propre voix** → active l'annulation
+- **L'assistante Gemini ne répond pas** → vérifie que ta clé API est bien
+  renseignée et valide (panneau Gemini > Tester la connexion).
+- **Gemini se déclenche en entendant sa propre voix** → active l'annulation
   d'écho (expérimentale) dans Réglages > 🔊 Sons ; sur certaines
   configurations, il faut aussi activer "Mixage stéréo" dans les
   paramètres d'enregistrement de Windows pour qu'elle fonctionne.
