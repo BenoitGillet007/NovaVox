@@ -3298,10 +3298,26 @@ async function onPiperExpressivenessChange(e) {
   await window.pywebview.api.ai_set_piper_noise_scale(e.target.value);
 }
 
+// Sigle affiché devant chaque voix (FR/EN/NL/ES/IT/DE) pour distinguer
+// les langues d'un coup d'œil — toutes les voix Piper restent listées
+// (pas seulement celles de ui_language) car rien n'empêche d'utiliser une
+// voix d'une autre langue que celle de l'interface.
+const PIPER_LANG_TAG = { fr: "FR", en: "EN", nl: "NL", es: "ES", it: "IT", de: "DE" };
+
 function renderPiperVoices(voices) {
   const list = document.getElementById("piperVoiceList");
   list.innerHTML = "";
-  voices.forEach((v) => {
+
+  // Les voix de la langue actuellement choisie (voir currentUiLanguage,
+  // gui/i18n.js) remontent en premier, pour ne pas avoir à chercher la
+  // sienne au milieu des 5 autres langues.
+  const sorted = [...voices].sort((a, b) => {
+    const aMatch = a.lang === currentUiLanguage ? 0 : 1;
+    const bMatch = b.lang === currentUiLanguage ? 0 : 1;
+    return aMatch - bMatch;
+  });
+
+  sorted.forEach((v) => {
     const row = document.createElement("div");
     row.className = "piper-voice-row" + (v.id === state.piperVoice ? " active" : "");
     row.dataset.voiceId = v.id;
@@ -3314,8 +3330,9 @@ function renderPiperVoices(voices) {
       `
       : `<button class="btn btn-ghost btn-sm" data-action="download">⬇ Télécharger</button>`;
 
+    const tag = PIPER_LANG_TAG[v.lang] || (v.lang || "").toUpperCase();
     row.innerHTML = `
-      <span class="piper-voice-label">${escapeHtml(v.label)}</span>
+      <span class="piper-voice-label"><span class="piper-voice-lang">(${tag})</span> ${escapeHtml(v.label)}</span>
       <span class="piper-voice-actions">${actions}</span>
     `;
     list.appendChild(row);
