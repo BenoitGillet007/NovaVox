@@ -126,32 +126,49 @@ function getResizeEdge(x, y, w, h) {
 }
 
 let resizeDrag = null;
+let resizeFrameRequested = false;
+
+// N'applique qu'une fois par frame d'affichage (requestAnimationFrame) au
+// lieu d'un appel pywebview.api à CHAQUE événement mousemove (qui peut se
+// déclencher bien plus vite que l'écran ne peut de toute façon afficher un
+// changement) — sans ça, le pont JS↔Python pouvait accumuler du retard et
+// donner l'impression que le redimensionnement ne suit pas le curseur.
+function applyResizeDrag(e) {
+  const dx = e.screenX - resizeDrag.startScreenX;
+  const dy = e.screenY - resizeDrag.startScreenY;
+  let newW = resizeDrag.startW;
+  let newH = resizeDrag.startH;
+  let newX = null;
+  let newY = null;
+  if (resizeDrag.edge.includes("right")) newW = resizeDrag.startW + dx;
+  if (resizeDrag.edge.includes("left")) {
+    newW = resizeDrag.startW - dx;
+    newX = resizeDrag.startWinX + dx;
+  }
+  if (resizeDrag.edge.includes("bottom")) newH = resizeDrag.startH + dy;
+  if (resizeDrag.edge.includes("top")) {
+    newH = resizeDrag.startH - dy;
+    newY = resizeDrag.startWinY + dy;
+  }
+  window.pywebview.api.resize_main_window(
+    Math.round(newW),
+    Math.round(newH),
+    newX !== null ? Math.round(newX) : null,
+    newY !== null ? Math.round(newY) : null
+  );
+}
 
 function initFramelessWindowResize() {
   document.addEventListener("mousemove", (e) => {
     if (resizeDrag) {
-      const dx = e.screenX - resizeDrag.startScreenX;
-      const dy = e.screenY - resizeDrag.startScreenY;
-      let newW = resizeDrag.startW;
-      let newH = resizeDrag.startH;
-      let newX = null;
-      let newY = null;
-      if (resizeDrag.edge.includes("right")) newW = resizeDrag.startW + dx;
-      if (resizeDrag.edge.includes("left")) {
-        newW = resizeDrag.startW - dx;
-        newX = resizeDrag.startWinX + dx;
+      resizeDrag.lastEvent = e;
+      if (!resizeFrameRequested) {
+        resizeFrameRequested = true;
+        requestAnimationFrame(() => {
+          resizeFrameRequested = false;
+          if (resizeDrag) applyResizeDrag(resizeDrag.lastEvent);
+        });
       }
-      if (resizeDrag.edge.includes("bottom")) newH = resizeDrag.startH + dy;
-      if (resizeDrag.edge.includes("top")) {
-        newH = resizeDrag.startH - dy;
-        newY = resizeDrag.startWinY + dy;
-      }
-      window.pywebview.api.resize_main_window(
-        Math.round(newW),
-        Math.round(newH),
-        newX !== null ? Math.round(newX) : null,
-        newY !== null ? Math.round(newY) : null
-      );
       return;
     }
     const edge = getResizeEdge(e.clientX, e.clientY, window.innerWidth, window.innerHeight);
@@ -169,6 +186,7 @@ function initFramelessWindowResize() {
       startH: window.outerHeight,
       startWinX: window.screenX,
       startWinY: window.screenY,
+      lastEvent: e,
     };
   });
   document.addEventListener("mouseup", () => {

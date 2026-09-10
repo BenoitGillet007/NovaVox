@@ -2844,20 +2844,29 @@ class Api:
         pywebview-drag-region) n'a pas fonctionné pour le
         redimensionnement sur ce type de fenêtre, d'où ce repli sur
         window.resize()/window.move(), déjà utilisés ailleurs dans ce
-        fichier (voir _run_correction) et donc fiables."""
+        fichier (voir _run_correction).
+
+        PAS de compensation d'échelle DPI ici (contrairement à
+        _apply_size_position, qui divise par _primary_monitor_scale()) :
+        cette compensation-là a été calibrée pour une coordonnée ABSOLUE
+        relue depuis window_config.json (donc déjà "vraie", en pixels
+        physiques) au moment de la création/restauration de la fenêtre —
+        alors qu'ici x/y viennent d'une position de souris LIVE
+        (e.screenX côté script.js), une source différente qui n'a pas
+        forcément le même comportement d'échelle vis-à-vis de
+        window.move(). Testé sans compensation en premier (retiré après
+        un premier essai avec compensation qui inversait/déformait le
+        redimensionnement par le bord gauche) : à réajuster si un écran
+        avec une mise à l'échelle Windows différente de 100% révèle un
+        écart."""
         if not self._window:
             return
         try:
             width = max(MAIN_WINDOW_MIN_SIZE[0], int(width))
             height = max(MAIN_WINDOW_MIN_SIZE[1], int(height))
-            self._window.resize(width, height)
             if x is not None and y is not None:
-                # window.move() multiplie les coordonnées reçues par
-                # l'échelle DPI de l'écran principal (bug documenté, voir
-                # _primary_monitor_scale) : compensé ici comme partout
-                # ailleurs où move() est utilisé dans ce fichier.
-                scale = _primary_monitor_scale()
-                self._window.move(round(int(x) / scale), round(int(y) / scale))
+                self._window.move(int(x), int(y))
+            self._window.resize(width, height)
         except Exception as e:
             self._log(f"[Erreur] Redimensionnement de la fenêtre impossible : {e}", "error")
 
