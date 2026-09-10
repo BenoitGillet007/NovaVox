@@ -822,6 +822,7 @@ UPDATE_MANIFEST_URL = _load_update_manifest_url()
 APP_VERSION_FALLBACK = "0.2.6"
 MODEL_DIR_DEFAULT = os.path.join(BASE_DIR, "model")
 GUI_INDEX = os.path.join(RESOURCE_DIR, "gui", "index.html")
+MAIN_WINDOW_TITLE = "Star Citizen — NOVAVOX"
 # Fenêtre séparée, superposée à Star Citizen — PAS une injection dans le
 # processus du jeu (voir plus bas pour le détail de l'approche et
 # pourquoi une injection DirectX/hook de rendu est volontairement exclue).
@@ -2258,6 +2259,41 @@ def _find_hwnd_by_title(title, timeout=5.0):
             return hwnd
         time.sleep(0.1)
     return None
+
+
+# Force la barre de titre native (celle dessinée par Windows, PAS le
+# contenu de la page) en mode sombre plutôt que le blanc par défaut, qui
+# jurait avec le thème sombre de l'application — voir _darken_main_window
+# ci-dessous. Valeur documentée par Microsoft (DWMWINDOWATTRIBUTE),
+# supportée depuis Windows 10 1809 (build 17763) et Windows 11.
+_DWMWA_USE_IMMERSIVE_DARK_MODE = 20
+
+
+def _apply_dark_titlebar(hwnd):
+    """Applique le mode sombre à la barre de titre native d'une fenêtre
+    déjà créée, via l'API DWM (Desktop Window Manager) de Windows.
+    Silencieux en cas d'échec (Windows antérieur à 2018, ou hwnd
+    introuvable) : la fenêtre reste utilisable avec la barre de titre
+    blanche par défaut dans ce cas, ce réglage est purement cosmétique."""
+    if sys.platform != "win32" or not hwnd:
+        return
+    try:
+        value = ctypes.c_int(1)
+        ctypes.windll.dwmapi.DwmSetWindowAttribute(
+            hwnd, _DWMWA_USE_IMMERSIVE_DARK_MODE, ctypes.byref(value), ctypes.sizeof(value)
+        )
+    except Exception:
+        pass
+
+
+def _darken_main_window_titlebar():
+    """Trouve la fenêtre principale par son titre et sombrit sa barre de
+    titre (voir _apply_dark_titlebar) — appelée en arrière-plan une fois
+    la fenêtre affichée (voir _on_loaded dans _wire_main_window_events),
+    jamais depuis le thread d'interface pour ne jamais le bloquer le
+    temps que _find_hwnd_by_title trouve le handle natif."""
+    hwnd = _find_hwnd_by_title(MAIN_WINDOW_TITLE, timeout=5.0)
+    _apply_dark_titlebar(hwnd)
 
 
 def _set_window_clickthrough(hwnd, clickthrough):
@@ -8009,6 +8045,10 @@ def _wire_main_window_events(window, window_config, on_loaded_extra=None, api=No
         if on_loaded_extra:
             on_loaded_extra()
         window.show()
+        # En arrière-plan : sombrit la barre de titre native (voir
+        # _darken_main_window_titlebar), sinon blanche par défaut et en
+        # décalage avec le thème sombre de l'application.
+        threading.Thread(target=_darken_main_window_titlebar, daemon=True).start()
 
         def _verify_after_show():
             # Filet de sécurité : si l'événement "maximized" ci-dessus ne
@@ -8163,7 +8203,7 @@ def _main_fast_path(window_config):
     if window_config["x"] is not None and window_config["y"] is not None:
         create_window_kwargs["x"] = window_config["x"]
         create_window_kwargs["y"] = window_config["y"]
-    window = webview.create_window("Star Citizen — NOVAVOX", GUI_INDEX, **create_window_kwargs)
+    window = webview.create_window(MAIN_WINDOW_TITLE, GUI_INDEX, **create_window_kwargs)
     api.set_window(window)
 
     # État partagé avec _wire_main_window_events (voir _on_closing) : tant
@@ -8290,7 +8330,7 @@ def _main_legacy_path(window_config):
     if window_config["x"] is not None and window_config["y"] is not None:
         create_window_kwargs["x"] = window_config["x"]
         create_window_kwargs["y"] = window_config["y"]
-    window = webview.create_window("Star Citizen — NOVAVOX", GUI_INDEX, **create_window_kwargs)
+    window = webview.create_window(MAIN_WINDOW_TITLE, GUI_INDEX, **create_window_kwargs)
     api.set_window(window)
 
     tray_state = {"active": False, "quitting": False}
