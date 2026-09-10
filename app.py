@@ -148,44 +148,11 @@ REQUIRED_PACKAGES = [
 ]
 
 # --------------------------------------------------------------------------
-# Assistant IA (Ollama, local et gratuit — https://ollama.com)
+# Assistant IA Gemini (Google, en ligne — https://aistudio.google.com)
 # --------------------------------------------------------------------------
-OLLAMA_BASE_URL = "http://localhost:11434"
-OLLAMA_DOWNLOAD_URL = "https://ollama.com/download"
-# URL de l'installeur Windows officiel, pour pouvoir le télécharger et le
-# lancer directement depuis l'application (voir ai_install_ollama), sans
-# obliger l'utilisateur à ouvrir un navigateur.
-OLLAMA_WINDOWS_INSTALLER_URL = "https://ollama.com/download/OllamaSetup.exe"
-DEFAULT_AI_NAME = "Nova"
 AI_QUESTION_TIMEOUT = 8.0  # secondes avant d'annuler l'attente d'une question
 AI_MAX_HISTORY_MESSAGES = 20  # ~10 échanges question/réponse conservés
 
-# Modèles proposés au choix à l'installation et dans les réglages. Liste
-# volontairement courte et curatée (pas la liste complète d'Ollama), pour
-# rester simple à choisir pour quelqu'un qui découvre l'assistant.
-DEFAULT_OLLAMA_MODEL = "llama3.2"
-AVAILABLE_MODELS = [
-    {
-        "id": "llama3.2",
-        "label": "Llama 3.2 (3B) — léger",
-        "description": "~2 Go. Rapide, tourne sur presque tous les PC, même sans carte graphique dédiée.",
-    },
-    {
-        "id": "llama3.1:8b",
-        "label": "Llama 3.1 (8B) — meilleure qualité",
-        "description": "~4,7 Go. Réponses plus cohérentes, demande un PC gaming standard (~8 Go de RAM/VRAM libres).",
-    },
-]
-
-# --------------------------------------------------------------------------
-# Assistant IA Gemini (Google, en ligne — https://aistudio.google.com)
-# --------------------------------------------------------------------------
-# Assistant SÉPARÉ de Nova/Ollama ci-dessus (voir DEFAULT_AI_NAME) : sa
-# propre clé API, son propre historique, son propre nom d'activation
-# vocale. Contrairement à Ollama, aucune installation locale n'est
-# nécessaire — juste une clé API gratuite (quota généreux pour un usage
-# personnel) — mais les questions posées sont envoyées aux serveurs de
-# Google, contrairement à Ollama qui reste 100% local.
 GEMINI_API_BASE_URL = "https://generativelanguage.googleapis.com/v1beta"
 DEFAULT_GEMINI_MODEL = "gemini-3.6-flash"
 DEFAULT_GEMINI_NAME = "Gemini"
@@ -228,6 +195,13 @@ GEMINI_DAILY_LIMITS = {
 }
 GEMINI_DAILY_LIMIT_DEFAULT = 500
 
+# Clé API personnelle : générée par l'utilisateur sur son propre compte
+# Google (aistudio.google.com), voir la mise en garde affichée dans
+# Réglages > Gemini. Les requêtes partent directement de cette machine
+# vers les serveurs Google avec cette clé — NovaVox ne les relaie pas et
+# ne voit jamais leur contenu.
+GEMINI_API_KEY_URL = "https://aistudio.google.com/app/apikey"
+
 try:
     # Le quota RPD de Google se réinitialise à minuit heure du Pacifique
     # (Californie), pas sur une fenêtre glissante de 24h — voir
@@ -240,13 +214,6 @@ except Exception:
     # zéro du compteur local peut dériver de quelques heures, le comptage
     # lui-même reste correct.
     GEMINI_QUOTA_TZ = datetime.timezone.utc
-
-# Emplacements où chercher l'exécutable Ollama si absent du PATH (arrive
-# quand Ollama vient d'être installé sans redémarrer l'application).
-OLLAMA_FALLBACK_PATHS = [
-    os.path.expandvars(r"%LOCALAPPDATA%\Programs\Ollama\ollama.exe"),
-    os.path.expandvars(r"%PROGRAMFILES%\Ollama\ollama.exe"),
-]
 
 # --------------------------------------------------------------------------
 # Modèle de reconnaissance vocale Vosk (téléchargement automatique)
@@ -405,18 +372,6 @@ def _download_file_with_retry(url, dest_path, headers=None, timeout=30,
                 time.sleep(1.5 * attempt)  # backoff simple avant le prochain essai
                 continue
             raise last_error
-
-
-def find_ollama_executable():
-    """Cherche l'exécutable ollama : d'abord dans le PATH, puis dans les
-    emplacements d'installation par défaut sur Windows."""
-    on_path = shutil.which("ollama")
-    if on_path:
-        return on_path
-    for path in OLLAMA_FALLBACK_PATHS:
-        if os.path.isfile(path):
-            return path
-    return None
 
 
 # --------------------------------------------------------------------------
@@ -841,7 +796,7 @@ OVERLAY_DEFAULT_HEIGHT = 250
 # chacune peut être masquée individuellement par l'utilisateur via une
 # case à cocher visible uniquement en mode "déplacer" (déverrouillé) —
 # voir Api.overlay_set_row_visible. Toutes visibles par défaut.
-OVERLAY_ROW_KEYS = ("time", "listening", "mic", "ai", "phrase", "zone", "lastCmd", "geminiQuota")
+OVERLAY_ROW_KEYS = ("time", "listening", "mic", "phrase", "zone", "lastCmd", "geminiQuota")
 
 def _version_tuple(v):
     """Convertit '0.1.2' en (0, 1, 2) pour une comparaison fiable
@@ -1123,7 +1078,7 @@ def apply_radio_effect(wav_path):
 
 # Fichier de log dédié aux erreurs applicatives "gérées" (celles qui
 # s'affichent dans le panneau via _log(..., "error")) : micro absent,
-# téléchargement échoué, Ollama injoignable, etc. À ne pas confondre avec
+# téléchargement échoué, Gemini injoignable, etc. À ne pas confondre avec
 # crash_log.txt (voir _install_crash_handler), qui capture lui les
 # exceptions non gérées qui font planter l'application entièrement.
 ERROR_LOG_FILE = os.path.join(BASE_DIR, "erreurs.log")
@@ -1132,7 +1087,7 @@ SAMPLE_RATE = 16000
 
 def _setup_error_logger():
     """Configure un logger qui écrit dans erreurs.log toutes les erreurs
-    signalées via Api._log(..., "error") (micro, réseau, Ollama, Vosk...).
+    signalées via Api._log(..., "error") (micro, réseau, Gemini, Vosk...).
     Utilise un RotatingFileHandler pour que le fichier ne grossisse pas
     indéfiniment (1 Mo max, 2 fichiers de sauvegarde conservés). Reste
     silencieux en cas d'échec de création du fichier (ex. dossier en
@@ -1164,17 +1119,17 @@ error_logger = _setup_error_logger()
 # dans l'appli (Assistant IA > ...), stocké dans ai_config.json.
 DEFAULT_TRIGGER_COOLDOWN = 3.0
 # Seuil de ressemblance (0-1) utilisé uniquement quand une phrase est dite
-# juste après le nom de l'IA (ex. "Nova, train d'atterrissage") : permet de
-# reconnaître une commande même si elle n'est pas dite mot pour mot, sans
-# quoi elle serait toujours envoyée en question à l'IA. Plus la valeur est
-# proche de 1, plus la phrase doit ressembler exactement à la commande.
+# juste après le nom de l'IA (ex. "Gemini, train d'atterrissage") : permet
+# de reconnaître une commande même si elle n'est pas dite mot pour mot,
+# sans quoi elle serait toujours envoyée en question à l'IA. Plus la valeur
+# est proche de 1, plus la phrase doit ressembler exactement à la commande.
 AI_COMMAND_MATCH_THRESHOLD = 0.6
-# Tournures interrogatives typiques ("Nova, c'est quoi la touche pour sortir
-# le train d'atterrissage ?") : la question peut contenir mot pour mot la
-# phrase d'une commande existante ("sortir le train d'atterrissage"), ce qui
-# la ferait à tort reconnaître et exécuter comme une commande au lieu de
-# partir en question vers l'IA — vécu en usage réel (le train sortait sans
-# que Nova ne réponde). On ne touche pas à la commande elle-même : dès
+# Tournures interrogatives typiques ("Gemini, c'est quoi la touche pour
+# sortir le train d'atterrissage ?") : la question peut contenir mot pour
+# mot la phrase d'une commande existante ("sortir le train d'atterrissage"),
+# ce qui la ferait à tort reconnaître et exécuter comme une commande au lieu
+# de partir en question vers l'IA — vécu en usage réel (le train sortait
+# sans que Gemini ne réponde). On ne touche pas à la commande elle-même : dès
 # qu'une de ces tournures apparaît, la phrase est considérée comme une
 # vraie question et n'est plus du tout comparée aux commandes (voir
 # _try_execute_command_from_ai_text).
@@ -1823,15 +1778,10 @@ def _auto_backup_config():
 def load_ai_config():
     config = {
         "ui_language": DEFAULT_UI_LANGUAGE,
-        "name": DEFAULT_AI_NAME,
         "voice": None,
         "confirm_commands": False,
-        "ai_enabled": True,
-        "model": DEFAULT_OLLAMA_MODEL,
         "trigger_cooldown": DEFAULT_TRIGGER_COOLDOWN,
-        "custom_context": "",
         "user_name": "",
-        "response_length": DEFAULT_RESPONSE_LENGTH,
         "piper_voice": None,
         "piper_length_scale": DEFAULT_PIPER_LENGTH_SCALE,
         "piper_noise_scale": DEFAULT_PIPER_NOISE_SCALE,
@@ -1860,8 +1810,6 @@ def load_ai_config():
                     config[key] = data[key]
             if config["ui_language"] not in SUPPORTED_LANGUAGES:
                 config["ui_language"] = DEFAULT_UI_LANGUAGE
-            if config["response_length"] not in RESPONSE_LENGTH_INSTRUCTIONS:
-                config["response_length"] = DEFAULT_RESPONSE_LENGTH
             if config["piper_voice"] not in PIPER_VOICES:
                 config["piper_voice"] = None
             try:
@@ -1873,7 +1821,6 @@ def load_ai_config():
             except (TypeError, ValueError):
                 config["piper_noise_scale"] = DEFAULT_PIPER_NOISE_SCALE
             config["radio_effect"] = bool(config["radio_effect"])
-            config["ai_enabled"] = bool(config.get("ai_enabled", True))
             config["gemini_enabled"] = bool(config.get("gemini_enabled", True))
             config["game_log_enabled"] = bool(config["game_log_enabled"])
             config["game_log_announce_events"] = bool(config["game_log_announce_events"])
@@ -2557,21 +2504,12 @@ class Api:
         self.stop_event = threading.Event()
         self.last_trigger = {}
         self._window = None
-        self.ai_history = []
-        self.ai_voice_output = True
         ai_config = load_ai_config()
         # Langue de l'interface/IA (voir SUPPORTED_LANGUAGES) : déjà validée
         # par load_ai_config, jamais None/inconnue ici.
         self.ui_language = ai_config["ui_language"]
-        self.ai_name = ai_config["name"]
-        self.ai_enabled = bool(ai_config.get("ai_enabled", True))
-        self.ai_model = ai_config["model"] or DEFAULT_OLLAMA_MODEL
         self.confirm_commands_voice = bool(ai_config["confirm_commands"])
-        self.ai_custom_context = ai_config.get("custom_context", "") or ""
         self.user_name = ai_config.get("user_name", "") or ""
-        self.ai_response_length = ai_config.get("response_length", DEFAULT_RESPONSE_LENGTH)
-        if self.ai_response_length not in RESPONSE_LENGTH_INSTRUCTIONS:
-            self.ai_response_length = DEFAULT_RESPONSE_LENGTH
         self.piper_voice = ai_config.get("piper_voice") or None
         if self.piper_voice not in PIPER_VOICES:
             self.piper_voice = None
@@ -2642,14 +2580,11 @@ class Api:
             self.trigger_cooldown = max(0.5, float(ai_config.get("trigger_cooldown", DEFAULT_TRIGGER_COOLDOWN)))
         except (TypeError, ValueError):
             self.trigger_cooldown = DEFAULT_TRIGGER_COOLDOWN
-        self._ai_awaiting_question = False
-        self._ai_awaiting_since = 0
 
         # Assistant Gemini — voir la section "Assistant IA Gemini" en tête
-        # de fichier. Complètement séparé de Nova/Ollama ci-dessus : sa
-        # propre clé API, son propre historique de discussion, son propre
-        # nom d'activation vocale (par défaut "Gemini", pour ne jamais
-        # entrer en conflit avec "Nova").
+        # de fichier : sa propre clé API, son propre historique de
+        # discussion, son propre nom d'activation vocale (par défaut
+        # "Gemini").
         self.gemini_history = []
         self.gemini_voice_output = True
         self.gemini_enabled = bool(ai_config.get("gemini_enabled", True))
@@ -3542,22 +3477,21 @@ class Api:
 
     # ------------------------------------------------- Réinitialisation --
 
-    def reset_application(self, remove_ollama=False):
+    def reset_application(self):
         """Point d'entrée appelé par le bouton "Réinitialiser l'application"
         des Réglages. Remet l'application dans son état de départ (juste
         après compilation, avant tout premier lancement) : supprime le
         modèle vocal téléchargé, les journaux et le raccourci Bureau,
-        réinitialise commandes et réglages aux valeurs par défaut, et
-        désinstalle Ollama + ses modèles si demandé. Ne supprime PAS le
-        programme lui-même (l'exécutable et ses fichiers restent en place,
-        réutilisables) mais ferme l'application à la fin — exactement
-        l'état d'un dossier tout juste compilé, jamais encore lancé.
-        Tourne sur un thread dédié pour ne jamais bloquer l'interface
-        pendant l'opération."""
-        threading.Thread(target=self._reset_application_thread, args=(bool(remove_ollama),), daemon=True).start()
+        réinitialise commandes et réglages aux valeurs par défaut. Ne
+        supprime PAS le programme lui-même (l'exécutable et ses fichiers
+        restent en place, réutilisables) mais ferme l'application à la fin
+        — exactement l'état d'un dossier tout juste compilé, jamais encore
+        lancé. Tourne sur un thread dédié pour ne jamais bloquer
+        l'interface pendant l'opération."""
+        threading.Thread(target=self._reset_application_thread, daemon=True).start()
         return {"ok": True}
 
-    def _reset_application_thread(self, remove_ollama):
+    def _reset_application_thread(self):
         self._log("Réinitialisation en cours...", "info")
 
         # 1) Couper l'écoute, la surveillance micro et toute synthèse
@@ -3576,11 +3510,7 @@ class Api:
         #    de l'exécutable (voir ensure_desktop_shortcut).
         self._remove_desktop_shortcut()
 
-        # 3) Désinstaller Ollama et ses modèles téléchargés, si demandé.
-        if remove_ollama:
-            self._uninstall_ollama()
-
-        # 4) Supprimer le modèle vocal téléchargé -- uniquement le dossier
+        # 3) Supprimer le modèle vocal téléchargé -- uniquement le dossier
         #    "model" par défaut créé par l'appli elle-même (téléchargé via
         #    download_vosk_model) ; si l'utilisateur avait choisi un
         #    dossier externe via "Parcourir", on n'y touche pas, il ne
@@ -3592,8 +3522,8 @@ class Api:
         except Exception as e:
             self._log(f"[Erreur réinitialisation] Suppression du modèle : {e}", "error")
 
-        # 4bis) Supprimer Piper (moteur vocal optionnel) et ses voix
-        #       téléchargées, dans le même esprit que le modèle Vosk.
+        # 4) Supprimer Piper (moteur vocal optionnel) et ses voix
+        #    téléchargées, dans le même esprit que le modèle Vosk.
         try:
             if os.path.isdir(PIPER_DIR):
                 shutil.rmtree(PIPER_DIR, ignore_errors=True)
@@ -3683,14 +3613,9 @@ class Api:
         self.last_trigger = {}
 
         self.ui_language = DEFAULT_UI_LANGUAGE
-        self.ai_name = DEFAULT_AI_NAME
-        self.ai_enabled = True
         self.confirm_commands_voice = False
-        self.ai_model = DEFAULT_OLLAMA_MODEL
         self.trigger_cooldown = DEFAULT_TRIGGER_COOLDOWN
-        self.ai_custom_context = ""
         self.user_name = ""
-        self.ai_response_length = DEFAULT_RESPONSE_LENGTH
         self.piper_voice = None
         self.piper_length_scale = DEFAULT_PIPER_LENGTH_SCALE
         self.piper_noise_scale = DEFAULT_PIPER_NOISE_SCALE
@@ -3704,7 +3629,6 @@ class Api:
         if self._game_log_watcher:
             self._game_log_watcher.stop()
             self._game_log_watcher = None
-        self.ai_history = []
         self.gemini_history = []
         self.gemini_enabled = True
         self.gemini_api_key = ""
@@ -3716,15 +3640,10 @@ class Api:
         self.gemini_request_day = ""
         save_ai_config({
             "ui_language": self.ui_language,
-            "name": self.ai_name,
             "voice": self.ai_voice,
             "confirm_commands": self.confirm_commands_voice,
-            "ai_enabled": self.ai_enabled,
-            "model": self.ai_model,
             "trigger_cooldown": self.trigger_cooldown,
-            "custom_context": self.ai_custom_context,
             "user_name": self.user_name,
-            "response_length": self.ai_response_length,
             "piper_voice": self.piper_voice,
             "piper_length_scale": self.piper_length_scale,
             "piper_noise_scale": self.piper_noise_scale,
@@ -3795,93 +3714,6 @@ class Api:
         except Exception as e:
             self._log(f"[Erreur réinitialisation] Suppression de window_config.json : {e}", "error")
 
-    def _uninstall_ollama(self):
-        """Désinstalle Ollama et ses modèles téléchargés, si Ollama est
-        présent sur cette machine. Cherche son désinstalleur officiel via
-        le registre Windows (emplacement standard où tout logiciel
-        installé avec un installeur classique déclare comment se retirer)
-        plutôt que de deviner un chemin ; le lance ensuite tel quel — sans
-        supposer d'option silencieuse spécifique, qui varie selon la
-        version d'Ollama — donc une dernière fenêtre de confirmation peut
-        apparaître côté désinstalleur. Termine en supprimant le dossier de
-        données restant (~/.ollama), pas toujours nettoyé par le
-        désinstalleur."""
-        if sys.platform != "win32":
-            self._log("[Info] Désinstallation d'Ollama non automatisée hors Windows.", "info")
-            return
-
-        exe_path = find_ollama_executable()
-        if exe_path:
-            try:
-                self._log("Arrêt du service Ollama...", "info")
-                creationflags = subprocess.CREATE_NO_WINDOW if hasattr(subprocess, "CREATE_NO_WINDOW") else 0
-                for proc_name in ("ollama.exe", "ollama app.exe"):
-                    subprocess.run(
-                        ["taskkill", "/IM", proc_name, "/F"],
-                        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
-                        creationflags=creationflags, timeout=10,
-                    )
-            except Exception:
-                pass
-
-        uninstall_cmd = self._find_ollama_uninstall_command()
-        if uninstall_cmd:
-            try:
-                self._log("Lancement du désinstalleur Ollama...", "info")
-                # Sous Windows, passer une chaîne de commande complète à
-                # Popen (sans shell=True) fonctionne directement — le
-                # backend Windows (CreateProcess) sait analyser les
-                # guillemets et arguments d'une UninstallString telle
-                # quelle. shell=True n'était donc pas nécessaire ici et
-                # exposait à une injection de commande si jamais la
-                # valeur du registre contenait des métacaractères shell
-                # (peu probable pour Ollama, mais évitable sans coût).
-                subprocess.Popen(uninstall_cmd)
-                time.sleep(3)  # laisse le temps au désinstalleur de démarrer
-            except Exception as e:
-                self._log(f"[Erreur désinstallation] Désinstalleur Ollama : {e}", "error")
-        else:
-            self._log(
-                "Désinstalleur Ollama introuvable automatiquement. Désinstalle-le "
-                "manuellement via Paramètres Windows > Applications si besoin.",
-                "error",
-            )
-
-        ollama_data_dir = os.path.expanduser("~/.ollama")
-        try:
-            if os.path.isdir(ollama_data_dir):
-                shutil.rmtree(ollama_data_dir, ignore_errors=True)
-                self._log("Dossier de données Ollama supprimé (modèles inclus).", "success")
-        except Exception as e:
-            self._log(f"[Erreur désinstallation] Suppression des données Ollama : {e}", "error")
-
-    def _find_ollama_uninstall_command(self):
-        """Cherche la commande de désinstallation officielle d'Ollama dans
-        le registre Windows (HKLM/HKCU > ... > Uninstall), l'emplacement
-        standard où tout programme installé via un installeur classique
-        déclare comment se désinstaller. Retourne None si introuvable
-        (Ollama absent, ou installé d'une façon non standard)."""
-        try:
-            script = (
-                "$paths = @("
-                "'HKLM:\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\*', "
-                "'HKLM:\\SOFTWARE\\WOW6432Node\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\*', "
-                "'HKCU:\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\*'"
-                "); "
-                "Get-ItemProperty $paths -ErrorAction SilentlyContinue | "
-                "Where-Object { $_.DisplayName -like '*Ollama*' } | "
-                "Select-Object -First 1 -ExpandProperty UninstallString"
-            )
-            encoded_cmd = base64.b64encode(script.encode("utf-16-le")).decode("ascii")
-            creationflags = subprocess.CREATE_NO_WINDOW if hasattr(subprocess, "CREATE_NO_WINDOW") else 0
-            result = subprocess.run(
-                ["powershell", "-NoProfile", "-NonInteractive", "-EncodedCommand", encoded_cmd],
-                capture_output=True, text=True, creationflags=creationflags, timeout=15,
-            )
-            cmd = (result.stdout or "").strip()
-            return cmd or None
-        except Exception:
-            return None
 
     # ------------------------------------------------- Microphone / audio
 
@@ -4973,21 +4805,18 @@ class Api:
         self._overlay_set_listening(False)
         return {"ok": True}
 
-    # ------------------------------------------------- Assistant IA (Ollama)
+    # ------------------------------------------------------ Réglages partagés
 
-    def ai_get_state(self):
+    def misc_get_state(self):
+        """État des réglages partagés qui ne sont pas propres à Gemini :
+        confirmation vocale des commandes, délai anti-répétition, prénom
+        utilisateur, moteur vocal Piper, effet radio, et réglages du
+        Game.log. Nommé sans "ai_"/"gemini_" car aucun de ces réglages
+        n'est propre à un assistant IA en particulier."""
         return {
-            "history": self.ai_history,
-            "voiceOutput": self.ai_voice_output,
-            "name": self.ai_name,
-            "enabled": self.ai_enabled,
             "confirmCommands": self.confirm_commands_voice,
-            "model": self.ai_model,
-            "availableModels": AVAILABLE_MODELS,
             "triggerCooldown": self.trigger_cooldown,
-            "customContext": self.ai_custom_context,
             "userName": self.user_name,
-            "responseLength": self.ai_response_length,
             "piperVoice": self.piper_voice,
             "piperLengthScale": (1.0 / self.piper_length_scale) if self.piper_length_scale else 1.0,
             "piperNoiseScale": self.piper_noise_scale,
@@ -5011,6 +4840,7 @@ class Api:
             "name": self.gemini_name,
             "enabled": self.gemini_enabled,
             "apiKey": self.gemini_api_key,
+            "apiKeyUrl": GEMINI_API_KEY_URL,
             "model": self.gemini_model,
             "availableModels": GEMINI_AVAILABLE_MODELS,
             "customContext": self.gemini_custom_context,
@@ -5025,9 +4855,7 @@ class Api:
     def gemini_toggle_enabled(self, enabled):
         """Active/désactive complètement l'assistant Gemini : plus aucune
         détection du mot d'activation dans _handle_text tant que c'est
-        désactivé (voir gemini_wake_word là-bas). Utile pour ne garder
-        qu'un seul des deux assistants (Nova ou Gemini) actif à la fois
-        si les deux en même temps font double emploi."""
+        désactivé (voir gemini_wake_word là-bas)."""
         self.gemini_enabled = bool(enabled)
         if not self.gemini_enabled:
             self._gemini_awaiting_question = False
@@ -5076,8 +4904,7 @@ class Api:
 
     def gemini_check_status(self):
         """Vérifie juste si une clé API est configurée — pas d'appel
-        réseau ici (contrairement à Ollama, pas de service local dont il
-        faut vérifier qu'il tourne), donc instantané et gratuit. Voir
+        réseau ici, donc instantané et gratuit. Voir
         gemini_test_connection pour un vrai test d'appel à l'API."""
         return {"hasKey": bool((self.gemini_api_key or "").strip()), "model": self.gemini_model}
 
@@ -5150,8 +4977,7 @@ class Api:
     def _gemini_ask(self, question):
         """Envoie une question à Gemini (déclenchée par son mot
         d'activation vocal, voir _handle_text) et pousse la conversation
-        vers son panneau dédié. Miroir de _ai_ask, mais pour un historique
-        et un panneau complètement séparés de Nova/Ollama."""
+        vers son panneau dédié."""
         self.gemini_history.append({"role": "user", "content": question})
         self._push(f"geminiUserMessage({json.dumps(question)})")
         threading.Thread(target=self._gemini_reply_thread, daemon=True).start()
@@ -5179,8 +5005,8 @@ class Api:
             )
             reply = (
                 f"[Limite atteinte] Tu as utilisé les {limit} requêtes gratuites du jour pour "
-                f"{model_label}. Le quota se réinitialise à minuit, heure du Pacifique (Californie) "
-                f"— utilise Nova (Ollama, local, illimité) en attendant{switch_hint}."
+                f"{model_label}. Le quota se réinitialise à minuit, heure du Pacifique (Californie)"
+                f"{switch_hint}."
             )
             self.gemini_history.append({"role": "assistant", "content": reply})
             self._push(f"geminiReceiveMessage({json.dumps(reply)})")
@@ -5195,8 +5021,8 @@ class Api:
             lang=self.ui_language,
         ) + game_state_block
 
-        # Gemini attend tout l'historique à chaque appel (comme Ollama),
-        # mais son rôle assistant s'appelle "model", pas "assistant".
+        # Gemini attend tout l'historique à chaque appel, mais son rôle
+        # assistant s'appelle "model", pas "assistant".
         contents = [
             {
                 "role": "model" if m["role"] == "assistant" else "user",
@@ -5266,14 +5092,9 @@ class Api:
     def _persist_ai_config(self):
         save_ai_config({
             "ui_language": self.ui_language,
-            "name": self.ai_name,
             "confirm_commands": self.confirm_commands_voice,
-            "ai_enabled": self.ai_enabled,
-            "model": self.ai_model,
             "trigger_cooldown": self.trigger_cooldown,
-            "custom_context": self.ai_custom_context,
             "user_name": self.user_name,
-            "response_length": self.ai_response_length,
             "piper_voice": self.piper_voice,
             "piper_length_scale": self.piper_length_scale,
             "piper_noise_scale": self.piper_noise_scale,
@@ -5643,24 +5464,6 @@ class Api:
         self._persist_ai_config()
         return self.user_name
 
-    def ai_set_response_length(self, value):
-        """Change la longueur de réponse souhaitée ("short", "normal" ou
-        "long" — voir RESPONSE_LENGTH_INSTRUCTIONS)."""
-        value = (value or "").strip()
-        if value not in RESPONSE_LENGTH_INSTRUCTIONS:
-            return self.ai_response_length
-        self.ai_response_length = value
-        self._persist_ai_config()
-        return self.ai_response_length
-
-    def ai_set_custom_context(self, text):
-        """Enregistre un texte libre (lore, règles maison, contexte de
-        partie...) que l'assistant IA prendra en compte dans toutes ses
-        réponses, en plus de son prompt système habituel."""
-        self.ai_custom_context = (text or "").strip()
-        self._persist_ai_config()
-        return self.ai_custom_context
-
     def ai_set_trigger_cooldown(self, seconds):
         """Change le délai minimum avant de pouvoir redéclencher la même
         commande (protection contre les redéclenchements rapprochés dus à
@@ -5673,30 +5476,10 @@ class Api:
         self._persist_ai_config()
         return self.trigger_cooldown
 
-    def ai_set_model(self, model_id):
-        """Change le modèle utilisé pour les prochaines conversations. Ne
-        le télécharge pas automatiquement : le panneau vérifie ensuite
-        s'il est déjà installé (ai_check_status) et propose de le
-        télécharger sinon (ai_pull_model)."""
-        model_id = (model_id or "").strip()
-        if not model_id:
-            return self.ai_model
-        self.ai_model = model_id
-        self._persist_ai_config()
-        return self.ai_model
-
     def ai_toggle_confirm_commands(self, enabled):
         self.confirm_commands_voice = bool(enabled)
         self._persist_ai_config()
         return self.confirm_commands_voice
-
-    def ai_set_name(self, name):
-        name = (name or "").strip()
-        if not name:
-            return self.ai_name
-        self.ai_name = name
-        self._persist_ai_config()
-        return self.ai_name
 
     # ------------------------------------------------- Moteur vocal Piper
 
@@ -5887,490 +5670,25 @@ class Api:
         voice_id = voice_id or self.piper_voice
         if not voice_id:
             return {"ok": False, "error": "Aucune voix Piper sélectionnée."}
-        sample = f"Bonjour, je suis {self.ai_name}, prêt à vous accompagner dans le vaisseau."
+        sample = "Bonjour, je suis prêt à vous accompagner dans le vaisseau."
         self._speak(sample, piper_voice=voice_id)
         return {"ok": True}
 
-    def ai_check_status(self, allow_autostart=False):
-        """Vérifie si Ollama tourne, et si le modèle actuellement
-        sélectionné (self.ai_model) est déjà téléchargé. Répercute aussi
-        le résultat vers l'overlay en jeu (voir _overlay_set_ai), pour
-        que son statut IA reste à jour à chaque vérification, quelle que
-        soit son origine (ouverture du panneau, bouton Revérifier...)."""
-        status = self._ai_check_status_impl(allow_autostart)
-        if status.get("running") and status.get("modelReady"):
-            label = f"prêt · {status.get('model')}" if status.get("model") else "prêt"
-        elif status.get("running"):
-            label = "modèle manquant"
-        else:
-            label = "hors ligne"
-        self._overlay_set_ai(label)
-        return status
-
-    def _ai_check_status_impl(self, allow_autostart=False):
-        """Vérifie si Ollama tourne, et si le modèle actuellement
-        sélectionné (self.ai_model) est déjà téléchargé.
-
-        allow_autostart=False (par défaut) : vérification PASSIVE, ne
-        touche à rien — utilisée à l'ouverture du panneau IA, pour ne
-        jamais relancer Ollama dans le dos de l'utilisateur juste parce
-        qu'il a regardé le statut (ça rendait notamment impossible de
-        tester volontairement "Ollama coupé").
-
-        allow_autostart=True : si l'exécutable est trouvé sur le disque
-        mais que le service ne répond pas, tente de le démarrer avant de
-        réessayer une fois (cas fréquent : Ollama vient d'être installé
-        mais son service en arrière-plan n'a pas encore été lancé) — et
-        le signale clairement dans le journal système, pour que ça ne
-        soit jamais un redémarrage silencieux. Réservé aux actions
-        explicites de l'utilisateur (bouton « Revérifier », installation
-        d'Ollama)."""
-        status = self._ai_ping_ollama()
-        if status["running"]:
-            return status
-
-        exe_path = find_ollama_executable()
-        if not exe_path:
-            return {"running": False, "modelReady": False, "model": self.ai_model,
-                    "installedModels": [], "installed": False, "downloadUrl": OLLAMA_DOWNLOAD_URL}
-
-        if not allow_autostart:
-            return {"running": False, "modelReady": False, "model": self.ai_model,
-                    "installedModels": [], "installed": True, "downloadUrl": OLLAMA_DOWNLOAD_URL}
-
-        # L'exécutable existe mais ne répond pas : on tente de le démarrer.
-        self._log("Tentative de démarrage automatique d'Ollama...", "info")
-        try:
-            creationflags = subprocess.CREATE_NO_WINDOW if hasattr(subprocess, "CREATE_NO_WINDOW") else 0
-            subprocess.Popen(
-                [exe_path, "serve"],
-                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
-                creationflags=creationflags,
-            )
-        except Exception:
-            pass
-
-        time.sleep(1.5)
-        status = self._ai_ping_ollama()
-        status["installed"] = True
-        if status["running"]:
-            self._log("Ollama démarré automatiquement avec succès.", "success")
-        if not status["running"]:
-            status["downloadUrl"] = OLLAMA_DOWNLOAD_URL
-        return status
-
-    def _ai_ping_ollama(self):
-        try:
-            with urllib.request.urlopen(f"{OLLAMA_BASE_URL}/api/tags", timeout=2) as resp:
-                data = json.loads(resp.read().decode("utf-8"))
-            installed_models = [m.get("name", "") for m in data.get("models", [])]
-            model_ready = any(
-                m == self.ai_model or m.startswith(self.ai_model + ":")
-                for m in installed_models
-            )
-            return {
-                "running": True,
-                "modelReady": model_ready,
-                "model": self.ai_model,
-                "installedModels": installed_models,
-            }
-        except (urllib.error.URLError, ConnectionRefusedError, OSError, TimeoutError):
-            return {"running": False, "modelReady": False, "model": self.ai_model, "installedModels": []}
-
-    def ai_install_ollama(self):
-        """Télécharge l'installeur Windows officiel d'Ollama et le lance,
-        pour que l'utilisateur puisse l'installer sans quitter
-        l'application ni chercher le lien lui-même. L'installeur garde son
-        interface normale une fois lancé (Ollama ne documente pas d'option
-        silencieuse fiable selon les versions) : l'utilisateur doit encore
-        suivre les quelques étapes affichées, puis revenir cliquer sur
-        « Revérifier »."""
-        threading.Thread(target=self._ai_install_ollama_thread, daemon=True).start()
-        return {"ok": True}
-
-    def _ai_install_ollama_thread(self):
-        if sys.platform != "win32":
-            self._push(f"aiInstallOllamaProgress({json.dumps('Installation automatique disponible uniquement sous Windows. Télécharge Ollama manuellement depuis ' + OLLAMA_DOWNLOAD_URL)})")
-            self._push("aiInstallOllamaDone(false)")
-            return
-
-        tmp_installer = None
-        try:
-            self._push(f"aiInstallOllamaProgress({json.dumps('Téléchargement de l’installeur Ollama...')})")
-            fd, tmp_installer = tempfile.mkstemp(suffix=".exe", dir=BASE_DIR)
-            os.close(fd)
-
-            last_reported = {"percent": -1}
-
-            def _on_chunk(downloaded, total):
-                if total:
-                    percent = int(downloaded / total * 100)
-                    if percent != last_reported["percent"]:
-                        last_reported["percent"] = percent
-                        mo = downloaded / (1024 * 1024)
-                        total_mo = total / (1024 * 1024)
-                        self._push(f"aiInstallOllamaProgress({json.dumps(f'Téléchargement... {mo:.0f} / {total_mo:.0f} Mo')})")
-                else:
-                    mo = downloaded / (1024 * 1024)
-                    self._push(f"aiInstallOllamaProgress({json.dumps(f'Téléchargement... {mo:.0f} Mo')})")
-
-            _download_file_with_retry(OLLAMA_WINDOWS_INSTALLER_URL, tmp_installer, on_chunk=_on_chunk)
-
-            self._push(f"aiInstallOllamaProgress({json.dumps('Lancement de l’installeur... suis les étapes affichées à l’écran si besoin.')})")
-            # Popen (pas run) : on ne bloque pas en attendant que
-            # l'utilisateur termine l'installeur, potentiellement
-            # interactif.
-            subprocess.Popen([tmp_installer], cwd=BASE_DIR)
-            self._push("aiInstallOllamaDone(true)")
-        except Exception as e:
-            self._push(f"aiInstallOllamaProgress({json.dumps('Erreur : ' + str(e))})")
-            self._push(f"aiInstallOllamaProgress({json.dumps('Tu peux aussi installer Ollama manuellement depuis ' + OLLAMA_DOWNLOAD_URL)})")
-            self._push("aiInstallOllamaDone(false)")
-            # En cas d'échec, le fichier temporaire (partiel ou inutile)
-            # peut être nettoyé tout de suite ; en cas de succès on le
-            # laisse en place, l'installeur en a besoin pendant qu'il
-            # tourne (et Windows le verrouille de toute façon).
-            try:
-                if tmp_installer and os.path.exists(tmp_installer):
-                    os.remove(tmp_installer)
-            except Exception:
-                pass
-            return
-
-        # Une fois l'installeur lancé, on enchaîne automatiquement :
-        # attendre que le service Ollama démarre (l'utilisateur peut
-        # encore avoir une étape à valider dans l'installeur Windows),
-        # puis télécharger directement le modèle IA actuellement choisi
-        # (llama3.2, llama3.1:8b...) — sans obliger l'utilisateur à
-        # revenir cliquer sur « Revérifier » puis « Télécharger le
-        # modèle » séparément : "installer l'IA" doit vouloir dire les
-        # deux étapes d'un coup.
-        attente_msg = "En attente du démarrage d'Ollama (termine l'installation à l'écran si besoin)..."
-        self._push(f"aiInstallOllamaProgress({json.dumps(attente_msg)})")
-        if not self._wait_for_ollama_ready(timeout=300):
-            self._push(f"aiInstallOllamaProgress({json.dumps('Ollama ne répond toujours pas après 5 minutes. Une fois l’installation terminée, clique sur « Revérifier ».')})")
-            return
-
-        self._push(f"aiInstallOllamaProgress({json.dumps(f'Ollama est démarré. Téléchargement du modèle « {self.ai_model} » choisi...')})")
-        self._ai_pull_model_thread()
-
-    def _wait_for_ollama_ready(self, timeout=300, interval=3):
-        """Attend que le service Ollama réponde (ping HTTP local),
-        typiquement après avoir lancé son installeur. Retente aussi de le
-        démarrer lui-même une fois en cours de route, au cas où
-        l'installation soit déjà terminée mais le service pas encore
-        lancé (cas fréquent juste après une installation). Retourne False
-        si le délai est dépassé sans succès."""
-        deadline = time.time() + timeout
-        tried_start = False
-        while time.time() < deadline:
-            if self._ai_ping_ollama()["running"]:
-                return True
-            if not tried_start:
-                exe_path = find_ollama_executable()
-                if exe_path:
-                    tried_start = True
-                    try:
-                        creationflags = subprocess.CREATE_NO_WINDOW if hasattr(subprocess, "CREATE_NO_WINDOW") else 0
-                        subprocess.Popen(
-                            [exe_path, "serve"],
-                            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
-                            creationflags=creationflags,
-                        )
-                    except Exception:
-                        pass
-            time.sleep(interval)
-        return False
-
-    def ai_pull_model(self):
-        """Télécharge le modèle actuellement sélectionné (self.ai_model)
-        en arrière-plan ; progression poussée dans le panneau de
-        discussion via ai_pull_progress / ai_pull_done."""
-        threading.Thread(target=self._ai_pull_model_thread, daemon=True).start()
-        return {"ok": True}
-
-    def _ai_pull_model_thread(self):
-        exe_path = find_ollama_executable()
-        if not exe_path:
-            self._push(f"aiPullProgress({json.dumps('Ollama introuvable sur cette machine. Installe-le depuis ' + OLLAMA_DOWNLOAD_URL + ', puis relance cette application.')})")
-            self._push("aiPullDone(false)")
-            return
-
-        try:
-            process = subprocess.Popen(
-                [exe_path, "pull", self.ai_model],
-                stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
-                text=True, encoding="utf-8", errors="replace",
-            )
-            for line in process.stdout:
-                line = line.strip()
-                if line:
-                    self._push(f"aiPullProgress({json.dumps(line)})")
-            process.wait()
-            if process.returncode == 0:
-                self._push("aiPullDone(true)")
-            else:
-                self._push(f"aiPullProgress({json.dumps(f'Le processus a échoué (code {process.returncode}). Vérifie ta connexion internet.')})")
-                self._push("aiPullDone(false)")
-        except FileNotFoundError:
-            self._push(f"aiPullProgress({json.dumps('Ollama introuvable. Installe-le depuis ' + OLLAMA_DOWNLOAD_URL)})")
-            self._push("aiPullDone(false)")
-        except Exception as e:
-            self._push(f"aiPullProgress({json.dumps('Erreur : ' + str(e))})")
-            self._push("aiPullDone(false)")
-
-    def ai_uninstall_model(self, model_id):
-        """Supprime un modèle Ollama du disque pour libérer de l'espace.
-        Fonctionne en arrière-plan ; le panneau se rafraîchit une fois
-        terminé via ai_uninstall_done."""
-        model_id = (model_id or "").strip()
-        if not model_id:
-            return {"ok": False, "error": "Aucun modèle indiqué."}
-        threading.Thread(target=self._ai_uninstall_model_thread, args=(model_id,), daemon=True).start()
-        return {"ok": True}
-
-    def _ai_uninstall_model_thread(self, model_id):
-        exe_path = find_ollama_executable()
-        if not exe_path:
-            self._log(f"[Erreur] Ollama introuvable, impossible de désinstaller « {model_id} ».", "error")
-            self._push("aiUninstallDone(false)")
-            return
-        try:
-            creationflags = subprocess.CREATE_NO_WINDOW if hasattr(subprocess, "CREATE_NO_WINDOW") else 0
-            result = subprocess.run(
-                [exe_path, "rm", model_id],
-                capture_output=True, text=True, creationflags=creationflags, timeout=30,
-            )
-            if result.returncode == 0:
-                self._log(f"Modèle « {model_id} » désinstallé, espace disque libéré.", "success")
-                self._push("aiUninstallDone(true)")
-            else:
-                self._log(f"[Erreur] Impossible de désinstaller « {model_id} » : {result.stderr.strip()}", "error")
-                self._push("aiUninstallDone(false)")
-        except Exception as e:
-            self._log(f"[Erreur] Désinstallation de « {model_id} » : {e}", "error")
-            self._push("aiUninstallDone(false)")
-
-    def ai_toggle_voice_output(self, enabled):
-        self.ai_voice_output = bool(enabled)
-        return self.ai_voice_output
-
-    def ai_toggle_enabled(self, enabled):
-        """Active/désactive complètement l'assistant Nova/Ollama : plus
-        aucune détection du mot d'activation dans _handle_text tant que
-        c'est désactivé (voir wake_word là-bas). Utile pour ne garder
-        qu'un seul des deux assistants (Nova ou Gemini) actif à la fois
-        si les deux en même temps font double emploi."""
-        self.ai_enabled = bool(enabled)
-        if not self.ai_enabled:
-            self._ai_awaiting_question = False
-        self._persist_ai_config()
-        return self.ai_enabled
-
-    def ai_clear_history(self):
-        self.ai_history = []
-        return {"ok": True}
-
-    def _ai_ask(self, question):
-        """Envoie une question à l'IA (déclenchée par le mot d'activation
-        "Nova" reconnu dans la boucle d'écoute) et pousse la conversation
-        vers le panneau. La réponse est aussi lue à voix haute si activé."""
-        self.ai_history.append({"role": "user", "content": question})
-        self._push(f"aiUserMessage({json.dumps(question)})")
-        threading.Thread(target=self._ai_reply_thread, daemon=True).start()
-
-    def _enforce_short_reply(self, reply):
-        """Filet de sécurité pour le mode "Courtes" : certains petits
-        modèles locaux (ex. Llama 3.2 3B) ne respectent pas toujours de
-        façon fiable la consigne de brièveté donnée dans le prompt
-        système — ils continuent d'enchaîner salutations, digressions et
-        questions de suivi. Cette fonction retaille la réponse a
-        posteriori pour garantir une seule phrase courte quoi qu'il
-        arrive, sans dépendre entièrement de l'obéissance du modèle. Elle
-        s'applique aussi à la version stockée dans l'historique, ce qui
-        évite en plus que le modèle n'imite ses propres réponses trop
-        longues lors des tours suivants."""
-        if self.ai_response_length != "short":
-            return reply
-        text = (reply or "").strip()
-        if not text or text.startswith("[Erreur]") or text.startswith("("):
-            return reply
-
-        # Réponse structurée en liste/étapes (ex. "1. ... 2. ... 3. ...",
-        # ou des tirets "- ...") : on ne découpe pas, une liste de
-        # consignes incomplète (coupée après "1.") est pire qu'une liste
-        # un peu longue mais complète et utilisable.
-        is_list = bool(re.search(r'(?:^|\n|\s)(?:\d+[.\)]|-)\s+\S', text))
-        if is_list:
-            return text
-
-        # Ne garde que la première "vraie" phrase : on avance de point en
-        # point jusqu'à avoir au moins quelques mots, pour ne pas couper
-        # après une simple interpellation ("Ammoniak !") qui n'est pas
-        # une phrase complète en soi. Un point précédé d'un chiffre
-        # ("1.", "3.5") n'est pas considéré comme une fin de phrase, pour
-        # ne pas confondre une numérotation ou un nombre décimal avec une
-        # vraie ponctuation.
-        matches = list(re.finditer(r'(?<!\d)[.!?](?:\s|$)', text))
-        if matches:
-            min_words = 4
-            end = matches[-1].end()
-            for m in matches:
-                candidate = text[:m.end()].strip()
-                if len(candidate.split()) >= min_words:
-                    end = m.end()
-                    break
-            return text[:end].strip()
-
-        # Aucune ponctuation de fin de phrase trouvée : la réponse est
-        # formulée comme une seule longue phrase sans point (fréquent
-        # avec un petit modèle qui enchaîne les virgules). On ne la coupe
-        # PAS au milieu — une réponse informative légitime mais un peu
-        # longue vaut mieux qu'une réponse tronquée et incompréhensible
-        # ("...il te faudra naviguer jusqu'à la frontière, en…"). On
-        # n'intervient qu'en tout dernier recours, si le texte est
-        # vraiment démesuré (signe probable d'un dérapage du modèle).
-        words = text.split()
-        max_words = 60
-        if len(words) > max_words:
-            text = " ".join(words[:max_words]).rstrip(".,;:!?") + "…"
-
-        return text
-
-    @staticmethod
-    def _compute_num_ctx(messages):
-        """Calcule une fenêtre de contexte (num_ctx) suffisante pour tout
-        faire tenir (prompt système + connaissances personnalisées +
-        historique de conversation), plutôt que de laisser Ollama sur sa
-        valeur par défaut (2048 tokens sur la plupart des installations) :
-        un lore un peu long dépasse vite cette limite, et le début du
-        contexte (qui peut contenir l'information demandée) se retrouve
-        tronqué — le modèle invente alors une réponse plausible mais
-        fausse plutôt que d'admettre qu'il ne sait pas. Reste toutefois
-        borné, pour ne pas alourdir excessivement la RAM/VRAM pendant que
-        Star Citizen tourne en même temps."""
-        total_chars = sum(len(m.get("content", "")) for m in messages)
-        # Estimation volontairement pessimiste (~1 token pour 2 caractères)
-        # pour ne jamais sous-évaluer le nombre de tokens réellement
-        # nécessaire.
-        estimated_tokens = total_chars // 2 + 512
-        num_ctx = max(2048, min(16384, ((estimated_tokens // 1024) + 1) * 1024))
-        return num_ctx
-
     # Plafond de tokens générés par réponse, selon le réglage de longueur
-    # choisi par l'utilisateur. Sans cette limite, Ollama génère souvent
-    # bien plus de texte que nécessaire (le modèle continue d'enchaîner
-    # phrases et digressions) avant que _enforce_short_reply ne le
-    # retaille après coup — un gaspillage direct de temps de génération,
-    # qui est le principal facteur de latence perçue sur un PC sans GPU
-    # dédié à l'IA (Star Citizen occupe déjà le GPU). Valeurs généreuses
-    # pour ne jamais couper une réponse légitime au milieu.
+    # choisi par l'utilisateur, pour ne jamais couper une réponse
+    # légitime au milieu tout en évitant un gaspillage de temps de
+    # génération sur du texte superflu.
     AI_NUM_PREDICT_BY_LENGTH = {"short": 80, "normal": 300, "long": 800}
 
     # Les modèles Gemini 3.x réfléchissent avant de répondre (thinkingLevel),
     # ce qui ajoute une latence significative avant même le premier mot de
     # la réponse — c'est cette étape de "réflexion" interne, invisible pour
     # l'utilisateur, qui est la principale cause de lenteur perçue sur
-    # Gemini (contrairement à Ollama, où le goulot est le matériel local).
-    # Pour un assistant vocal de commandes courtes, un niveau réduit
-    # accélère nettement la réponse sans perte de qualité notable ; "medium"
-    # (le défaut de l'API) n'est gardé que pour les réponses longues, où un
-    # peu plus de réflexion reste utile.
+    # Gemini. Pour un assistant vocal de commandes courtes, un niveau
+    # réduit accélère nettement la réponse sans perte de qualité notable ;
+    # "medium" (le défaut de l'API) n'est gardé que pour les réponses
+    # longues, où un peu plus de réflexion reste utile.
     GEMINI_THINKING_LEVEL_BY_LENGTH = {"short": "minimal", "normal": "low", "long": "medium"}
-
-    def _ai_reply_thread(self):
-        # GARDE-FOU : vérifie d'abord rapidement (2s max) qu'Ollama répond
-        # avant de tenter la requête de génération complète. Si Ollama
-        # n'est pas lancé, ça évite d'attendre jusqu'à 60 secondes pour un
-        # échec qui, dans certains cas (pare-feu, antivirus, résolution
-        # localhost), peut mettre bien plus de temps que l'instantané
-        # "connexion refusée" attendu à trainer avant de se manifester.
-        if not self._ai_ping_ollama()["running"]:
-            reply = (
-                "[Erreur] Ollama n'est pas lancé. Ouvre le panneau Assistant IA "
-                "et clique sur « Revérifier », ou démarre Ollama manuellement."
-            )
-            self.ai_history.append({"role": "assistant", "content": reply})
-            self._push(f"aiReceiveMessage({json.dumps(reply)})")
-            return
-
-        game_state_block = ""
-        if self._game_log_watcher:
-            game_state_block = game_state_to_prompt_block(self._game_log_watcher.get_state())
-
-        messages = [{
-            "role": "system",
-            "content": ai_system_prompt(
-                self.ai_name, self.ai_custom_context, self.user_name, self.ai_response_length,
-                lang=self.ui_language,
-            ) + game_state_block,
-        }] + self.ai_history
-        num_predict = self.AI_NUM_PREDICT_BY_LENGTH.get(
-            self.ai_response_length, self.AI_NUM_PREDICT_BY_LENGTH["normal"]
-        )
-        payload = json.dumps({
-            "model": self.ai_model,
-            "messages": messages,
-            "stream": False,
-            "options": {
-                "num_ctx": self._compute_num_ctx(messages),
-                "num_predict": num_predict,
-            },
-            # Garde le modèle chargé en mémoire 30 minutes après chaque
-            # usage (au lieu des 5 minutes par défaut d'Ollama) : Nova est
-            # utilisée par intermittence pendant une session de jeu, et un
-            # modèle déchargé doit être entièrement rechargé depuis le
-            # disque à la requête suivante — souvent bien plus lent que la
-            # génération elle-même sur un PC sans GPU dédié à l'IA. C'est
-            # la principale cause de lenteur perçue de l'assistant IA.
-            "keep_alive": "30m",
-        }).encode("utf-8")
-
-        req = urllib.request.Request(
-            f"{OLLAMA_BASE_URL}/api/chat",
-            data=payload,
-            headers={"Content-Type": "application/json"},
-            method="POST",
-        )
-        try:
-            with urllib.request.urlopen(req, timeout=45) as resp:
-                data = json.loads(resp.read().decode("utf-8"))
-            reply = data.get("message", {}).get("content", "").strip()
-            if not reply:
-                reply = "(réponse vide du modèle)"
-        except TimeoutError:
-            # On sait déjà qu'Ollama tourne (voir le pré-check en tête de
-            # méthode, juste avant) : un timeout ICI ne veut donc PAS dire
-            # "Ollama n'est pas lancé", mais que la génération elle-même
-            # (modèle lourd et/ou contexte personnalisé volumineux, sur un
-            # PC sans GPU dédié à l'IA) prend plus de 45 secondes. Message
-            # différent de celui du pré-check, pour ne pas induire en
-            # erreur sur la vraie cause.
-            reply = (
-                "[Erreur] Ollama est bien lancé, mais la génération de la réponse a "
-                f"pris plus de 45 secondes avec le modèle « {self.ai_model} ». Essaie "
-                "un modèle plus léger (llama3.2) ou réduis la taille de tes "
-                "connaissances personnalisées dans les réglages avancés."
-            )
-        except (urllib.error.URLError, ConnectionRefusedError, OSError) as e:
-            reply = (f"[Erreur] Impossible de contacter Ollama ({e}). "
-                     f"Vérifie qu'Ollama est lancé et que le modèle est installé.")
-        except Exception as e:
-            reply = f"[Erreur] {e}"
-
-        reply = self._enforce_short_reply(reply)
-
-        self.ai_history.append({"role": "assistant", "content": reply})
-        if len(self.ai_history) > AI_MAX_HISTORY_MESSAGES:
-            # Garde uniquement les échanges les plus récents : avec un
-            # long contexte personnalisé (lore...), un historique qui
-            # grossit sans limite finirait par saturer la fenêtre de
-            # contexte au fil d'une longue session.
-            self.ai_history = self.ai_history[-AI_MAX_HISTORY_MESSAGES:]
-        self._push(f"aiReceiveMessage({json.dumps(reply)})")
-
-        if self.ai_voice_output and "[Erreur]" not in reply:
-            self._speak(reply)
 
     @staticmethod
     def _strip_markdown_for_speech(text):
@@ -6561,11 +5879,11 @@ class Api:
 
     def _is_stop_phrase(self, text_norm):
         """Détecte une demande d'interruption vocale du type
-        "<nom de l'IA> stop" (ou arrête, silence, tais-toi...), utilisée
-        pour couper une réponse trop longue en train d'être lue. Exige le
-        nom de l'IA en plus du mot d'arrêt pour éviter qu'un "stop" capté
-        par hasard (vidéo, discussion) ne coupe la voix à tort."""
-        wake_word = self.ai_name.lower().strip()
+        "Gemini stop" (ou arrête, silence, tais-toi...), utilisée pour
+        couper une réponse trop longue en train d'être lue. Exige le nom
+        de l'IA en plus du mot d'arrêt pour éviter qu'un "stop" capté par
+        hasard (vidéo, discussion) ne coupe la voix à tort."""
+        wake_word = self.gemini_name.lower().strip()
         if not wake_word or wake_word not in text_norm:
             return False
         stop_keywords = ("stop", "stoppe", "arrête", "arrete", "silence", "tais-toi", "tais toi", "chut")
@@ -6968,8 +6286,6 @@ class Api:
         self._overlay_push(f"overlaySetListening({'true' if self.listening else 'false'})")
         if "phrase" in st:
             self._overlay_push(f"overlaySetPhrase({json.dumps(st['phrase'])})")
-        if "ai" in st:
-            self._overlay_push(f"overlaySetAi({json.dumps(st['ai'])})")
         if "zone" in st:
             self._overlay_push(f"overlaySetZone({json.dumps(st['zone'])})")
         if "lastCommand" in st:
@@ -6998,10 +6314,6 @@ class Api:
     def _overlay_set_phrase(self, text):
         self._overlay_last_state["phrase"] = text
         self._overlay_push(f"overlaySetPhrase({json.dumps(text)})")
-
-    def _overlay_set_ai(self, text):
-        self._overlay_last_state["ai"] = text
-        self._overlay_push(f"overlaySetAi({json.dumps(text)})")
 
     def _overlay_set_zone(self, text):
         self._overlay_last_state["zone"] = text
@@ -7066,9 +6378,9 @@ class Api:
             # déclencher si une hypothèse voisine, presque aussi probable
             # pour le décodeur, correspond exactement (voir _handle_text).
             # Coût quasi nul (le décodeur explore déjà ces chemins en
-            # interne), et n'affecte en rien le mot d'activation "Nova" ni
-            # les questions libres posées à l'IA — seule la correspondance
-            # de commande directe en tient compte.
+            # interne), et n'affecte en rien le mot d'activation "Gemini"
+            # ni les questions libres posées à l'IA — seule la
+            # correspondance de commande directe en tient compte.
             recognizer.SetMaxAlternatives(3)
         except Exception as e:
             self._log(f"[Erreur] Impossible de charger le modèle : {e}", "error")
@@ -7177,32 +6489,14 @@ class Api:
 
     def _handle_text(self, text, alt_texts=None):
         text_norm = text.lower().strip()
-        # wake_word/gemini_wake_word vides quand l'assistant correspondant
-        # est désactivé (voir ai_toggle_enabled/gemini_toggle_enabled) :
-        # son mot d'activation n'est alors jamais détecté ci-dessous, comme
-        # s'il n'existait pas — utile pour ne garder qu'un seul des deux
-        # assistants actif si les deux en même temps font double emploi.
-        wake_word = self.ai_name.lower().strip() if self.ai_enabled else ""
+        # gemini_wake_word vide quand l'assistant est désactivé (voir
+        # gemini_toggle_enabled) : son mot d'activation n'est alors jamais
+        # détecté ci-dessous, comme s'il n'existait pas.
         gemini_wake_word = self.gemini_name.lower().strip() if self.gemini_enabled else ""
 
         # Étape 1 : si on attend la question suite au nom prononcé seul,
         # la phrase reconnue est envoyée telle quelle à l'IA (pas de
-        # correspondance de commande sur cette phrase-là). Nova d'abord,
-        # puis Gemini (voir gemini_name — les deux assistants sont
-        # complètement indépendants, un seul peut être "en attente" à la
-        # fois puisque chaque mot d'activation reprend son propre état).
-        if self._ai_awaiting_question:
-            self._ai_awaiting_question = False
-            if time.time() - self._ai_awaiting_since > AI_QUESTION_TIMEOUT:
-                self._log(f"({self.ai_name} : délai dépassé, annulé)", "info")
-            elif text_norm:
-                if self._try_execute_command_from_ai_text(text.strip()):
-                    return
-                self._log(f"Question pour {self.ai_name} : « {text.strip()} »", "info")
-                self._overlay_set_phrase(text.strip())
-                self._ai_ask(text.strip())
-            return
-
+        # correspondance de commande sur cette phrase-là).
         if self._gemini_awaiting_question:
             self._gemini_awaiting_question = False
             if time.time() - self._gemini_awaiting_since > AI_QUESTION_TIMEOUT:
@@ -7216,30 +6510,10 @@ class Api:
             return
 
         # Étape 2 : détection du nom de l'IA n'importe où dans la phrase
-        # (pas seulement au début) — "c'est quoi le bouclier, Nova ?" ou
-        # "dis-moi Nova comment ça marche" fonctionnent tous les deux.
+        # (pas seulement au début) — "c'est quoi le bouclier, Gemini ?" ou
+        # "dis-moi Gemini comment ça marche" fonctionnent tous les deux.
         # Le nom est retiré de la phrase pour ne garder que la question ;
         # s'il ne reste rien, on passe en attente de la question suivante.
-        # Nova est vérifiée en premier : si jamais les deux noms sont
-        # identiques (renommage manuel malheureux), c'est elle qui gagne.
-        if wake_word:
-            pattern = r"(?<!\w)" + re.escape(wake_word) + r"(?!\w)"
-            match = re.search(pattern, text_norm)
-            if match:
-                question = (text_norm[:match.start()] + " " + text_norm[match.end():])
-                question = re.sub(r"\s+", " ", question).strip()
-                if question:
-                    if self._try_execute_command_from_ai_text(question):
-                        return
-                    self._log(f"Question pour {self.ai_name} : « {question} »", "info")
-                    self._overlay_set_phrase(question)
-                    self._ai_ask(question)
-                else:
-                    self._ai_awaiting_question = True
-                    self._ai_awaiting_since = time.time()
-                    self._log(f"{self.ai_name} à l'écoute, pose ta question...", "info")
-                return
-
         if gemini_wake_word:
             pattern = r"(?<!\w)" + re.escape(gemini_wake_word) + r"(?!\w)"
             match = re.search(pattern, text_norm)
@@ -7401,7 +6675,7 @@ class Api:
         keys_label = self._command_keys_label(cmd)
         if via_ai:
             self._log(
-                f"  → Commande reconnue via {self.ai_name} (ressemblance {ratio:.0%}) : "
+                f"  → Commande reconnue via {self.gemini_name} (ressemblance {ratio:.0%}) : "
                 f"touche(s) '{keys_label}'",
                 "success",
             )

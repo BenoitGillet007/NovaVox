@@ -234,13 +234,6 @@
       <span class="value off" id="micValue">—</span>
     </div>
 
-    <div class="row" id="rowAi">
-      <input type="checkbox" class="row-toggle" id="toggle_ai" checked onchange="onRowToggleChange('ai', this.checked)">
-      <span class="icon">🤖</span>
-      <span class="label">IA :</span>
-      <span class="value off" id="aiValue">—</span>
-    </div>
-
     <div class="row" id="phraseRow">
       <input type="checkbox" class="row-toggle" id="toggle_phrase" checked onchange="onRowToggleChange('phrase', this.checked)">
       <span class="icon">💬</span>
@@ -329,13 +322,6 @@
       document.getElementById("phraseValue").textContent = text || "…";
     }
 
-    function overlaySetAi(text) {
-      const el = document.getElementById("aiValue");
-      el.textContent = text || "—";
-      const lower = (text || "").toLowerCase();
-      el.className = "value " + (lower.includes("prêt") ? "ok" : lower.includes("hors ligne") ? "off" : "warn");
-    }
-
     function overlaySetZone(text) {
       const el = document.getElementById("zoneValue");
       el.textContent = text || "—";
@@ -385,7 +371,6 @@
       time: "rowTime",
       listening: "rowListening",
       mic: "rowMic",
-      ai: "rowAi",
       phrase: "phraseRow",
       zone: "rowZone",
       lastCmd: "lastCmdRow",

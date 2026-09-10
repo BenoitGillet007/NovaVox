@@ -14,7 +14,6 @@
 const TRANSLATIONS = {
   fr: {
     "topbar.subtitle": "Reconnaissance vocale hors-ligne — Star Citizen",
-    "topbar.ai": "🤖 Assistant IA",
     "topbar.gemini": "🌟 Assistant Gemini",
     "topbar.gamelog": "🛰 Game.log",
     "topbar.settingsTitle": "Réglages (modèle vocal, microphone)",
@@ -34,7 +33,6 @@ const TRANSLATIONS = {
     "addform.submit": "Ajouter",
     "settings.title": "⚙️ Réglages",
     "settings.tab.sons": "🔊 Sons",
-    "settings.tab.ia": "🤖 IA",
     "settings.tab.gemini": "🌟 IA Gemini",
     "settings.tab.gamelog": "🛰 Game.log",
     "settings.divers.language.label": "Langue de l'interface",
@@ -51,7 +49,6 @@ const TRANSLATIONS = {
   },
   en: {
     "topbar.subtitle": "Offline speech recognition — Star Citizen",
-    "topbar.ai": "🤖 AI Assistant",
     "topbar.gemini": "🌟 Gemini Assistant",
     "topbar.gamelog": "🛰 Game.log",
     "topbar.settingsTitle": "Settings (voice model, microphone)",
@@ -71,7 +68,6 @@ const TRANSLATIONS = {
     "addform.submit": "Add",
     "settings.title": "⚙️ Settings",
     "settings.tab.sons": "🔊 Sound",
-    "settings.tab.ia": "🤖 AI",
     "settings.tab.gemini": "🌟 Gemini AI",
     "settings.tab.gamelog": "🛰 Game.log",
     "settings.divers.language.label": "Interface language",
@@ -88,7 +84,6 @@ const TRANSLATIONS = {
   },
   nl: {
     "topbar.subtitle": "Offline spraakherkenning — Star Citizen",
-    "topbar.ai": "🤖 AI-assistent",
     "topbar.gemini": "🌟 Gemini-assistent",
     "topbar.gamelog": "🛰 Game.log",
     "topbar.settingsTitle": "Instellingen (spraakmodel, microfoon)",
@@ -108,7 +103,6 @@ const TRANSLATIONS = {
     "addform.submit": "Toevoegen",
     "settings.title": "⚙️ Instellingen",
     "settings.tab.sons": "🔊 Geluid",
-    "settings.tab.ia": "🤖 AI",
     "settings.tab.gemini": "🌟 Gemini-AI",
     "settings.tab.gamelog": "🛰 Game.log",
     "settings.divers.language.label": "Taal van de interface",
@@ -125,7 +119,6 @@ const TRANSLATIONS = {
   },
   es: {
     "topbar.subtitle": "Reconocimiento de voz sin conexión — Star Citizen",
-    "topbar.ai": "🤖 Asistente IA",
     "topbar.gemini": "🌟 Asistente Gemini",
     "topbar.gamelog": "🛰 Game.log",
     "topbar.settingsTitle": "Ajustes (modelo de voz, micrófono)",
@@ -145,7 +138,6 @@ const TRANSLATIONS = {
     "addform.submit": "Añadir",
     "settings.title": "⚙️ Ajustes",
     "settings.tab.sons": "🔊 Sonido",
-    "settings.tab.ia": "🤖 IA",
     "settings.tab.gemini": "🌟 IA Gemini",
     "settings.tab.gamelog": "🛰 Game.log",
     "settings.divers.language.label": "Idioma de la interfaz",
@@ -162,7 +154,6 @@ const TRANSLATIONS = {
   },
   it: {
     "topbar.subtitle": "Riconoscimento vocale offline — Star Citizen",
-    "topbar.ai": "🤖 Assistente IA",
     "topbar.gemini": "🌟 Assistente Gemini",
     "topbar.gamelog": "🛰 Game.log",
     "topbar.settingsTitle": "Impostazioni (modello vocale, microfono)",
@@ -182,7 +173,6 @@ const TRANSLATIONS = {
     "addform.submit": "Aggiungi",
     "settings.title": "⚙️ Impostazioni",
     "settings.tab.sons": "🔊 Audio",
-    "settings.tab.ia": "🤖 IA",
     "settings.tab.gemini": "🌟 IA Gemini",
     "settings.tab.gamelog": "🛰 Game.log",
     "settings.divers.language.label": "Lingua dell'interfaccia",
@@ -199,7 +189,6 @@ const TRANSLATIONS = {
   },
   de: {
     "topbar.subtitle": "Offline-Spracherkennung — Star Citizen",
-    "topbar.ai": "🤖 KI-Assistent",
     "topbar.gemini": "🌟 Gemini-Assistent",
     "topbar.gamelog": "🛰 Game.log",
     "topbar.settingsTitle": "Einstellungen (Sprachmodell, Mikrofon)",
@@ -219,7 +208,6 @@ const TRANSLATIONS = {
     "addform.submit": "Hinzufügen",
     "settings.title": "⚙️ Einstellungen",
     "settings.tab.sons": "🔊 Ton",
-    "settings.tab.ia": "🤖 KI",
     "settings.tab.gemini": "🌟 Gemini-KI",
     "settings.tab.gamelog": "🛰 Game.log",
     "settings.divers.language.label": "Sprache der Oberfläche",

@@ -132,27 +132,22 @@ async function init() {
     appendLog("[Erreur] Impossible de charger l'état initial.", "error");
   }
   checkForUpdate(); // ne bloque pas le reste de l'init (pas d'await bloquant l'UI)
-  initAiButtonsVisibility(); // pas d'await bloquant : juste affichage des boutons du haut
+  initAiButtonsVisibility(); // pas d'await bloquant : juste affichage du bouton du haut
   setStatus("idle", t("status.idle.label"), t("status.idle.sub"));
 }
 
-// Cache dès le lancement les boutons "Assistant IA"/"Assistant Gemini" de la
-// barre du haut pour l'assistant désactivé (voir ai_toggle_enabled /
-// gemini_toggle_enabled côté app.py) — sans ça, un assistant désactivé
-// garderait son bouton visible tant que l'utilisateur n'ouvre pas les
-// Réglages, puisque updateAiButtonVisibility/updateGeminiButtonVisibility
-// ne sont sinon appelées qu'à ce moment-là ou lors du changement de la case.
+// Cache dès le lancement le bouton "Assistant Gemini" de la barre du haut
+// s'il est désactivé (voir gemini_toggle_enabled côté app.py) — sans ça, un
+// assistant désactivé garderait son bouton visible tant que l'utilisateur
+// n'ouvre pas les Réglages, puisque updateGeminiButtonVisibility n'est
+// sinon appelée qu'à ce moment-là ou lors du changement de la case.
 async function initAiButtonsVisibility() {
   try {
-    const [aiData, geminiData] = await Promise.all([
-      window.pywebview.api.ai_get_state(),
-      window.pywebview.api.gemini_get_state(),
-    ]);
-    updateAiButtonVisibility(aiData.enabled !== false);
+    const geminiData = await window.pywebview.api.gemini_get_state();
     updateGeminiButtonVisibility(geminiData.enabled !== false);
   } catch (e) {
-    // Silencieux : au pire les deux boutons restent visibles, comme avant
-    // l'ajout de cette fonctionnalité.
+    // Silencieux : au pire le bouton reste visible, comme avant l'ajout de
+    // cette fonctionnalité.
   }
 }
 
@@ -272,24 +267,10 @@ function bindEvents() {
 
   buildVirtualKeyboard();
 
-  document.getElementById("openAiBtn").addEventListener("click", openAiChat);
-  document.getElementById("closeAiBtn").addEventListener("click", closeAiChat);
-  document.getElementById("aiModal").addEventListener("click", (e) => {
-    if (e.target.id === "aiModal") closeAiChat();
-  });
   document.getElementById("openGameLogBtn").addEventListener("click", openGameLogEntriesModal);
   document.getElementById("closeGameLogEntriesBtn").addEventListener("click", closeGameLogEntriesModal);
   document.getElementById("gameLogEntriesModal").addEventListener("click", (e) => {
     if (e.target.id === "gameLogEntriesModal") closeGameLogEntriesModal();
-  });
-  document.getElementById("aiRecheckBtn").addEventListener("click", () => refreshAiStatus(true));
-  document.getElementById("aiInstallOllamaBtn").addEventListener("click", startAiInstallOllama);
-  document.getElementById("aiPullBtn").addEventListener("click", startAiPull);
-  document.getElementById("aiClearBtn").addEventListener("click", clearAiChat);
-  document.getElementById("aiRenameBtn").addEventListener("click", renameAi);
-  document.getElementById("aiUserNameBtn").addEventListener("click", editUserName);
-  document.getElementById("aiVoiceOutputToggle").addEventListener("change", (e) => {
-    window.pywebview.api.ai_toggle_voice_output(e.target.checked);
   });
   document.getElementById("aiConfirmCommandsToggle").addEventListener("change", (e) => {
     window.pywebview.api.ai_toggle_confirm_commands(e.target.checked);
@@ -297,31 +278,11 @@ function bindEvents() {
   document.getElementById("aiCooldownInput").addEventListener("change", (e) => {
     window.pywebview.api.ai_set_trigger_cooldown(e.target.value);
   });
-  document.getElementById("aiEnabledToggle").addEventListener("change", async (e) => {
-    await window.pywebview.api.ai_toggle_enabled(e.target.checked);
-    updateAiButtonVisibility(e.target.checked);
-    appendLog(
-      e.target.checked ? "🤖 Assistant Nova (Ollama) activé." : "Assistant Nova (Ollama) désactivé.",
-      "info"
-    );
-  });
   document.getElementById("gameLogToggle").addEventListener("change", onGameLogToggle);
   document.getElementById("gameLogAnnounceToggle").addEventListener("change", onGameLogAnnounceToggle);
   document.getElementById("gameLogPlayerHandleSaveBtn").addEventListener("click", onSaveGameLogPlayerHandle);
   document.getElementById("gameLogHudOverrideAddBtn").addEventListener("click", onAddGameLogHudOverride);
   document.getElementById("gameLogDestinationAliasAddBtn").addEventListener("click", onAddGameLogDestinationAlias);
-  document.getElementById("aiContextInput").addEventListener("input", updateContextCount);
-  document.getElementById("aiContextSaveBtn").addEventListener("click", saveAiContext);
-  document.getElementById("aiModelSelect").addEventListener("change", async (e) => {
-    await window.pywebview.api.ai_set_model(e.target.value);
-    updateModelDesc(e.target.value);
-    refreshAiStatus();
-  });
-  document.getElementById("aiUninstallBtn").addEventListener("click", onUninstallModel);
-  document.getElementById("aiResponseLengthSelect").addEventListener("change", async (e) => {
-    await window.pywebview.api.ai_set_response_length(e.target.value);
-  });
-
   document.getElementById("openGeminiBtn").addEventListener("click", openGeminiChat);
   document.getElementById("closeGeminiBtn").addEventListener("click", closeGeminiChat);
   document.getElementById("geminiModal").addEventListener("click", (e) => {
@@ -928,9 +889,7 @@ function switchSettingsTab(tabName) {
   document.querySelectorAll(".settings-tab-panel").forEach((panel) => {
     panel.classList.toggle("hidden", panel.dataset.settingsPanel !== tabName);
   });
-  if (tabName === "ia") {
-    loadAiSettingsTab();
-  } else if (tabName === "gemini") {
+  if (tabName === "gemini") {
     loadGeminiSettingsTab();
   } else if (tabName === "gamelog") {
     loadGameLogSettingsTab();
@@ -1177,12 +1136,9 @@ async function browseModel() {
 }
 
 async function onResetApp() {
-  const removeOllama = document.getElementById("resetRemoveOllamaCheck").checked;
   const btn = document.getElementById("resetAppBtn");
 
-  const detail = removeOllama
-    ? "le modèle vocal téléchargé, tes commandes/réglages personnalisés, les journaux, le raccourci Bureau, ET Ollama avec ses modèles IA"
-    : "le modèle vocal téléchargé, tes commandes/réglages personnalisés, les journaux et le raccourci Bureau (Ollama ne sera pas touché)";
+  const detail = "le modèle vocal téléchargé, tes commandes/réglages personnalisés, les journaux et le raccourci Bureau";
 
   if (!confirm(`Ceci va supprimer ${detail}, remettre l'application dans son état de départ, et la fermer.\n\nCette action est IRRÉVERSIBLE. Continuer ?`)) {
     return;
@@ -1193,7 +1149,7 @@ async function onResetApp() {
   appendLog("Réinitialisation de l'application demandée par l'utilisateur...", "info");
 
   try {
-    await window.pywebview.api.reset_application(removeOllama);
+    await window.pywebview.api.reset_application();
     // L'interface se recharge d'elle-même une fois la réinitialisation
     // terminée côté Python (voir _reset_application_thread) : rien
     // d'autre à faire ici.
@@ -2604,140 +2560,13 @@ function flashCommand(index) {
   setTimeout(() => card.classList.remove("flash"), 650);
 }
 
-function updateContextCount() {
-  const val = document.getElementById("aiContextInput").value;
-  const el = document.getElementById("aiContextCount");
-  if (el) el.textContent = `${val.length} caractères`;
-}
-
-async function saveAiContext() {
-  const val = document.getElementById("aiContextInput").value.trim();
-  const saved = await window.pywebview.api.ai_set_custom_context(val);
-  document.getElementById("aiContextInput").value = saved;
-  updateContextCount();
-  appendLog(
-    saved ? "Connaissances personnalisées enregistrées pour l'assistant IA." : "Connaissances personnalisées effacées.",
-    "info"
-  );
-}
-
-/* ---------------------------------------------------- Assistant IA */
-
-// Cache le bouton "🤖 Assistant IA" de la barre du haut quand Nova/Ollama
-// est désactivé (voir ai_toggle_enabled côté app.py) — évite d'ouvrir un
-// panneau pour un assistant qui ne répondra de toute façon plus au mot
-// d'activation vocal.
-function updateAiButtonVisibility(enabled) {
-  const btn = document.getElementById("openAiBtn");
-  if (btn) btn.classList.toggle("hidden", enabled === false);
-}
-
-async function openAiChat() {
-  document.getElementById("aiModal").classList.remove("hidden");
-  updateAiWakeDot();
-
-  try {
-    const data = await window.pywebview.api.ai_get_state();
-    document.getElementById("aiChat").innerHTML = "";
-    (data.history || []).forEach((m) => appendAiMessage(m.role, m.content));
-    document.getElementById("aiVoiceOutputToggle").checked = data.voiceOutput !== false;
-    updateAiName(data.name);
-    updateUserNameDisplay(data.userName);
-  } catch (e) {
-    // état IA non disponible, ignore
-  }
-
-  refreshAiStatus();
-}
-
-async function loadAiSettingsTab() {
-  try {
-    const data = await window.pywebview.api.ai_get_state();
-    document.getElementById("aiEnabledToggle").checked = data.enabled !== false;
-    updateAiButtonVisibility(data.enabled !== false);
-    document.getElementById("aiConfirmCommandsToggle").checked = !!data.confirmCommands;
-    document.getElementById("aiCooldownInput").value = data.triggerCooldown ?? 3.0;
-    document.getElementById("aiContextInput").value = data.customContext || "";
-    updateContextCount();
-    document.getElementById("aiResponseLengthSelect").value = data.responseLength || "normal";
-    loadModelOptions(data.availableModels || [], data.model);
-
-    state.piperVoice = data.piperVoice || null;
-    document.getElementById("radioEffectToggle").checked = !!data.radioEffect;
-    setPiperSpeedValue(data.piperLengthScale ?? 1.0);
-    setPiperExpressivenessValue(data.piperNoiseScale ?? 0.667);
-    await refreshPiperStatus();
-  } catch (e) {
-    // état IA non disponible, ignore
-  }
-}
-
-function loadModelOptions(models, selectedModel) {
-  const select = document.getElementById("aiModelSelect");
-  select.innerHTML = "";
-  models.forEach((m) => {
-    const opt = document.createElement("option");
-    opt.value = m.id;
-    opt.textContent = m.label;
-    opt.dataset.description = m.description || "";
-    select.appendChild(opt);
-  });
-  select.value = selectedModel || (models[0] && models[0].id) || "";
-  updateModelDesc(select.value);
-}
-
-function updateModelDesc(modelId) {
-  const select = document.getElementById("aiModelSelect");
-  const opt = [...select.options].find((o) => o.value === modelId);
-  const desc = opt ? opt.dataset.description : "";
-  document.getElementById("aiModelDesc").textContent = modelId ? `${desc} (${modelId})` : desc;
-}
-
-async function onUninstallModel() {
-  const select = document.getElementById("aiModelSelect");
-  const modelId = select.value;
-  if (!modelId) return;
-  const confirmed = confirm(`Désinstaller le modèle « ${modelId} » ? Il faudra le retélécharger pour le réutiliser.`);
-  if (!confirmed) return;
-
-  appendLog(`[Info] Désinstallation de « ${modelId} » en cours...`, "info");
-  await window.pywebview.api.ai_uninstall_model(modelId);
-}
-
-// Appelé par Python une fois la désinstallation terminée
-function aiUninstallDone(success) {
-  refreshAiStatus();
-}
-
-function updateAiName(name) {
-  if (!name) return;
-  document.getElementById("aiPanelTitle").textContent = `Assistant IA (${name})`;
-  document.getElementById("aiWakeName").textContent = `« ${name} »`;
-}
-
-async function renameAi() {
-  const current = document.getElementById("aiWakeName").textContent.replace(/[«»\s]/g, "");
-  const next = prompt("Quel nom veux-tu donner à l'assistant ?", current);
-  if (next && next.trim()) {
-    const newName = await window.pywebview.api.ai_set_name(next.trim());
-    updateAiName(newName);
-    appendLog(`[Info] L'assistant s'appelle maintenant « ${newName} ».`, "info");
-  }
-}
-
 function updateUserNameDisplay(name) {
-  // Le prénom est un réglage PARTAGÉ entre Nova et Gemini (même profil
-  // utilisateur, deux assistants distincts) — met donc à jour les deux
-  // affichages si présents, plutôt qu'un seul.
-  const text = name && name.trim() ? name.trim() : "prénom non renseigné";
-  ["aiUserNameDisplay", "geminiUserNameDisplay"].forEach((id) => {
-    const el = document.getElementById(id);
-    if (el) el.textContent = text;
-  });
+  const el = document.getElementById("geminiUserNameDisplay");
+  if (el) el.textContent = name && name.trim() ? name.trim() : "prénom non renseigné";
 }
 
 async function editUserName() {
-  const current = document.getElementById("aiUserNameDisplay").textContent;
+  const current = document.getElementById("geminiUserNameDisplay").textContent;
   const seed = current === "prénom non renseigné" ? "" : current;
   const next = prompt("Comment veux-tu que l'assistant t'appelle ?", seed);
   if (next === null) return; // annulé
@@ -2750,10 +2579,6 @@ async function editUserName() {
 }
 
 /* ------------------------------------------------------- Assistant Gemini */
-// Miroir de la section "Assistant IA" ci-dessus, mais entièrement séparé :
-// sa propre discussion, son propre mot d'activation, sa propre clé API. Pas
-// d'installation/téléchargement local à gérer (contrairement à Ollama) —
-// juste une clé API à renseigner dans les réglages (onglet 🌟 IA Gemini).
 
 // Cache le bouton "🌟 Assistant Gemini" de la barre du haut quand Gemini
 // est désactivé (voir gemini_toggle_enabled côté app.py) — évite d'ouvrir un
@@ -2887,6 +2712,23 @@ async function loadGeminiSettingsTab() {
   } catch (e) {
     // état Gemini non disponible, ignore
   }
+
+  // Réglages partagés (pas propres à Gemini) : confirmation vocale des
+  // commandes, anti-répétition, et moteur vocal Piper — voir
+  // Api.misc_get_state côté app.py.
+  try {
+    const misc = await window.pywebview.api.misc_get_state();
+    document.getElementById("aiConfirmCommandsToggle").checked = !!misc.confirmCommands;
+    document.getElementById("aiCooldownInput").value = misc.triggerCooldown ?? 3.0;
+
+    state.piperVoice = misc.piperVoice || null;
+    document.getElementById("radioEffectToggle").checked = !!misc.radioEffect;
+    setPiperSpeedValue(misc.piperLengthScale ?? 1.0);
+    setPiperExpressivenessValue(misc.piperNoiseScale ?? 0.667);
+    await refreshPiperStatus();
+  } catch (e) {
+    // réglages partagés non disponibles, ignore
+  }
 }
 
 function loadGeminiModelOptions(models, selectedModel) {
@@ -3000,7 +2842,7 @@ async function onRadioEffectToggle(e) {
 
 async function loadGameLogSettingsTab() {
   try {
-    const data = await window.pywebview.api.ai_get_state();
+    const data = await window.pywebview.api.misc_get_state();
     document.getElementById("gameLogToggle").checked = !!data.gameLogEnabled;
     document.getElementById("gameLogAnnounceToggle").checked = data.gameLogAnnounce !== false;
     document.getElementById("gameLogPlayerHandleInput").value = data.gameLogPlayerHandle || "";
@@ -3011,11 +2853,11 @@ async function loadGameLogSettingsTab() {
 
 async function loadGameLogEntriesPanel() {
   try {
-    // Réutilise ai_get_state : elle renvoie déjà tous les champs
+    // Réutilise misc_get_state : elle renvoie déjà tous les champs
     // gameLog* nécessaires (phrases, corrections de notifications), pas
     // la peine d'un point d'entrée dédié côté Python pour un simple
     // affichage.
-    const data = await window.pywebview.api.ai_get_state();
+    const data = await window.pywebview.api.misc_get_state();
     renderGameLogPhrases(
       data.gameLogPhrases || {},
       data.gameLogPhraseDefaults || {},
@@ -3555,167 +3397,6 @@ async function piperVoiceDone(voiceId, success) {
     appendLog(`[Erreur] Le téléchargement de la voix Piper « ${voiceId} » a échoué.`, "error");
   }
   await refreshPiperStatus();
-}
-
-function updateAiWakeDot() {
-  const dot = document.getElementById("aiWakeDot");
-  if (dot) dot.classList.toggle("active", state.listening);
-}
-
-function closeAiChat() {
-  document.getElementById("aiModal").classList.add("hidden");
-}
-
-async function refreshAiStatus(allowAutostart = false) {
-  const badge = document.getElementById("aiStatusBadge");
-  const setup = document.getElementById("aiSetup");
-  const setupText = document.getElementById("aiSetupText");
-  const pullBtn = document.getElementById("aiPullBtn");
-  const installBtn = document.getElementById("aiInstallOllamaBtn");
-
-  badge.textContent = "vérification...";
-  badge.className = "ai-badge checking";
-
-  const status = await window.pywebview.api.ai_check_status(allowAutostart);
-
-  if (!status.running) {
-    badge.textContent = "hors ligne";
-    badge.className = "ai-badge offline";
-    setup.classList.remove("hidden");
-    if (status.installed) {
-      setupText.innerHTML = allowAutostart
-        ? `Ollama est installé mais son service ne répond pas (la tentative de ` +
-          `démarrage automatique a échoué). Lance-le manuellement depuis le menu ` +
-          `Démarrer, puis clique sur « Revérifier ». S'il vient d'être installé, ` +
-          `redémarre aussi cette application.`
-        : `Ollama est installé mais ne semble pas lancé actuellement. Clique sur ` +
-          `« Revérifier » pour que NovaVox tente de le démarrer automatiquement.`;
-      installBtn.classList.add("hidden");
-    } else {
-      setupText.innerHTML =
-        `Ollama n'est pas détecté. Clique sur « Installer Ollama » ci-dessous : il sera ` +
-        `téléchargé, installé, puis le modèle IA choisi (${status.model || "..."}) sera ` +
-        `téléchargé automatiquement à la suite.`;
-      installBtn.classList.remove("hidden");
-    }
-    pullBtn.classList.add("hidden");
-    return;
-  }
-
-  installBtn.classList.add("hidden");
-
-  if (!status.modelReady) {
-    badge.textContent = `modèle manquant · ${status.model}`;
-    badge.className = "ai-badge offline";
-    setup.classList.remove("hidden");
-    setupText.textContent =
-      `Ollama est bien lancé, mais le modèle "${status.model}" n'est pas encore téléchargé (quelques Go, une seule fois).`;
-    pullBtn.classList.remove("hidden");
-    return;
-  }
-
-  badge.textContent = status.model ? `prêt · ${status.model}` : "prêt";
-  badge.className = "ai-badge ready";
-  setup.classList.add("hidden");
-}
-
-async function startAiInstallOllama() {
-  const installBtn = document.getElementById("aiInstallOllamaBtn");
-  const installLog = document.getElementById("aiInstallOllamaLog");
-  installBtn.disabled = true;
-  installLog.classList.remove("hidden");
-  installLog.textContent = "Démarrage du téléchargement...\n";
-
-  await window.pywebview.api.ai_install_ollama();
-}
-
-// Appelé par Python pendant le téléchargement/lancement de l'installeur Ollama
-function aiInstallOllamaProgress(line) {
-  const installLog = document.getElementById("aiInstallOllamaLog");
-  installLog.textContent += line + "\n";
-  installLog.scrollTop = installLog.scrollHeight;
-}
-
-// Appelé par Python une fois l'installeur Ollama téléchargé et lancé
-// (pas une fois qu'Ollama est réellement installé : l'utilisateur doit
-// encore suivre les étapes de l'installeur Windows, puis cliquer sur
-// « Revérifier »).
-function aiInstallOllamaDone(success) {
-  document.getElementById("aiInstallOllamaBtn").disabled = false;
-  if (!success) {
-    appendLog("[Erreur] Le téléchargement/lancement de l'installeur Ollama a échoué.", "error");
-  }
-}
-
-async function startAiPull() {
-  const pullBtn = document.getElementById("aiPullBtn");
-  const pullLog = document.getElementById("aiPullLog");
-  pullBtn.disabled = true;
-  pullLog.classList.remove("hidden");
-  pullLog.textContent = "Démarrage du téléchargement...\n";
-
-  await window.pywebview.api.ai_pull_model();
-}
-
-// Appelé par Python pendant le téléchargement du modèle
-function aiPullProgress(line) {
-  const pullLog = document.getElementById("aiPullLog");
-  pullLog.classList.remove("hidden");
-  pullLog.textContent += line + "\n";
-  pullLog.scrollTop = pullLog.scrollHeight;
-}
-
-// Appelé par Python une fois le téléchargement terminé
-function aiPullDone(success) {
-  document.getElementById("aiPullBtn").disabled = false;
-  if (success) {
-    refreshAiStatus();
-  } else {
-    appendLog("[Erreur] Le téléchargement du modèle IA a échoué.", "error");
-  }
-}
-
-function appendAiMessage(role, content, pending) {
-  const chat = document.getElementById("aiChat");
-  const bubble = document.createElement("div");
-  bubble.className = "ai-msg " + (pending ? "pending" : role);
-  bubble.textContent = content;
-  chat.appendChild(bubble);
-  chat.scrollTop = chat.scrollHeight;
-  return bubble;
-}
-
-let aiPendingBubble = null;
-
-// Appelé par Python dès que "Nova" + une question ont été reconnus
-function aiUserMessage(text) {
-  appendAiMessage("user", text);
-  aiPendingBubble = appendAiMessage("assistant", "…réflexion…", true);
-
-  // Si le panneau est fermé, on l'ouvre pour montrer la conversation.
-  const modal = document.getElementById("aiModal");
-  if (modal.classList.contains("hidden")) {
-    modal.classList.remove("hidden");
-    updateAiWakeDot();
-    refreshAiStatus();
-  }
-}
-
-// Appelé par Python quand la réponse de l'IA est prête
-function aiReceiveMessage(text) {
-  if (aiPendingBubble) {
-    aiPendingBubble.classList.remove("pending");
-    aiPendingBubble.classList.add("assistant");
-    aiPendingBubble.textContent = text;
-    aiPendingBubble = null;
-  } else {
-    appendAiMessage("assistant", text);
-  }
-}
-
-async function clearAiChat() {
-  await window.pywebview.api.ai_clear_history();
-  document.getElementById("aiChat").innerHTML = "";
 }
 
 /* ------------------------------------------------------------- Utils */
