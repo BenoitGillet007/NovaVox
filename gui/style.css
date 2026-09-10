@@ -37,11 +37,22 @@ html[data-theme="light"] {
 * { box-sizing: border-box; }
 body {
   margin: 0;
-  background: var(--bg);
+  /* Image de fond (NovaVox_fond.png, 4095x1151) : taille native (pas
+     de background-size, donc pas d'étirement), centrée, fixe par
+     rapport à la fenêtre (pas au contenu qui défile). Le contenu
+     (.app) fait 1180px de large max et centré (voir .app plus bas) :
+     agrandir la fenêtre révèle donc progressivement plus de l'image
+     de part et d'autre. background-color reste en repli une fois
+     sorti des bords de l'image (4095px de large, 1151px de haut). */
+  background-color: var(--bg);
+  background-image: url('NovaVox_fond.png');
+  background-position: center center;
+  background-repeat: no-repeat;
+  background-attachment: fixed;
   color: var(--text);
   font-family: var(--font-display);
   font-size: 15px;
-  transition: background 0.25s ease, color 0.25s ease;
+  transition: background-color 0.25s ease, color 0.25s ease;
 }
 .app {
   max-width: 1180px;
