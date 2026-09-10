@@ -2261,41 +2261,6 @@ def _find_hwnd_by_title(title, timeout=5.0):
     return None
 
 
-# Force la barre de titre native (celle dessinée par Windows, PAS le
-# contenu de la page) en mode sombre plutôt que le blanc par défaut, qui
-# jurait avec le thème sombre de l'application — voir _darken_main_window
-# ci-dessous. Valeur documentée par Microsoft (DWMWINDOWATTRIBUTE),
-# supportée depuis Windows 10 1809 (build 17763) et Windows 11.
-_DWMWA_USE_IMMERSIVE_DARK_MODE = 20
-
-
-def _apply_dark_titlebar(hwnd):
-    """Applique le mode sombre à la barre de titre native d'une fenêtre
-    déjà créée, via l'API DWM (Desktop Window Manager) de Windows.
-    Silencieux en cas d'échec (Windows antérieur à 2018, ou hwnd
-    introuvable) : la fenêtre reste utilisable avec la barre de titre
-    blanche par défaut dans ce cas, ce réglage est purement cosmétique."""
-    if sys.platform != "win32" or not hwnd:
-        return
-    try:
-        value = ctypes.c_int(1)
-        ctypes.windll.dwmapi.DwmSetWindowAttribute(
-            hwnd, _DWMWA_USE_IMMERSIVE_DARK_MODE, ctypes.byref(value), ctypes.sizeof(value)
-        )
-    except Exception:
-        pass
-
-
-def _darken_main_window_titlebar():
-    """Trouve la fenêtre principale par son titre et sombrit sa barre de
-    titre (voir _apply_dark_titlebar) — appelée en arrière-plan une fois
-    la fenêtre affichée (voir _on_loaded dans _wire_main_window_events),
-    jamais depuis le thread d'interface pour ne jamais le bloquer le
-    temps que _find_hwnd_by_title trouve le handle natif."""
-    hwnd = _find_hwnd_by_title(MAIN_WINDOW_TITLE, timeout=5.0)
-    _apply_dark_titlebar(hwnd)
-
-
 def _set_window_clickthrough(hwnd, clickthrough):
     """Active/désactive le mode "clic-traversant" d'une fenêtre déjà
     créée, en ne touchant QUE le bit WS_EX_TRANSPARENT. Reste
@@ -2557,6 +2522,12 @@ class Api:
         self.stop_event = threading.Event()
         self.last_trigger = {}
         self._window = None
+        # Handle natif Windows de la fenêtre principale, trouvé une fois
+        # celle-ci affichée (voir _on_loaded/_finalize_main_window) —
+        # nécessaire pour le redimensionnement natif par les bords/coins
+        # (voir start_window_resize), la fenêtre étant frameless (Windows
+        # ne le gère plus tout seul sans barre de titre).
+        self._main_hwnd = None
         self.ai_history = []
         self.ai_voice_output = True
         ai_config = load_ai_config()
@@ -2848,6 +2819,57 @@ class Api:
 
     def set_window(self, window):
         self._window = window
+
+    def minimize_window(self):
+        """Réduit la fenêtre principale dans la barre des tâches —
+        remplace le bouton natif "réduire", qui disparaît avec la barre
+        de titre depuis que la fenêtre est frameless (voir le bouton
+        personnalisé dans la barre du haut de index.html). Pas
+        d'équivalent "fermer" à côté : la fermeture se fait déjà via
+        l'icône de la barre des tâches (voir _on_closing), inutile de le
+        dupliquer ici."""
+        if not self._window:
+            return
+        try:
+            self._window.minimize()
+        except Exception as e:
+            self._log(f"[Erreur] Réduction de la fenêtre impossible : {e}", "error")
+
+    # Codes de zone Win32 standards (WinUser.h) pour WM_NCHITTEST/
+    # WM_NCLBUTTONDOWN, un par bord/coin — voir start_window_resize.
+    # Valeurs documentées Microsoft, identiques à celles utilisées par
+    # n'importe quelle fenêtre Windows normale pour son redimensionnement.
+    _RESIZE_HIT_TEST_CODES = {
+        "left": 10, "right": 11, "top": 12, "bottom": 15,
+        "top-left": 13, "top-right": 14, "bottom-left": 16, "bottom-right": 17,
+    }
+
+    def start_window_resize(self, edge):
+        """Démarre un redimensionnement natif Windows de la fenêtre
+        principale depuis le bord/coin indiqué (voir _RESIZE_HIT_TEST_CODES
+        pour les valeurs attendues). Nécessaire depuis que la fenêtre est
+        frameless (create_window_kwargs) : Windows ne gère alors plus tout
+        seul le redimensionnement par glisser des bords, contrairement à
+        une fenêtre normale avec barre de titre. Même technique native
+        (WM_NCLBUTTONDOWN) que overlay_start_native_drag/le glisser de la
+        fenêtre principale (pywebview-drag-region), mais avec un code de
+        zone HTLEFT/HTRIGHT/... au lieu de HTCAPTION — Windows prend alors
+        en charge tout le redimensionnement lui-même (contraintes de
+        taille min/max, échelle DPI...), exactement comme pour une
+        fenêtre classique. Le bord/coin est détecté côté JS selon la
+        position du curseur par rapport aux limites de la fenêtre (voir
+        script.js) : aucune zone de redimensionnement visible n'est
+        dessinée, comme la plupart des fenêtres modernes sans bordure."""
+        hit_test = self._RESIZE_HIT_TEST_CODES.get(edge)
+        if not hit_test or not self._main_hwnd:
+            return {"ok": False}
+        try:
+            ctypes.windll.user32.ReleaseCapture()
+            ctypes.windll.user32.SendMessageW(self._main_hwnd, self._WM_NCLBUTTONDOWN, hit_test, 0)
+        except Exception as e:
+            self._log(f"[Erreur] Redimensionnement natif impossible : {e}", "error")
+            return {"ok": False}
+        return {"ok": True}
 
     # ------------------------------------------------- Appels JS -> ici
 
@@ -8045,10 +8067,16 @@ def _wire_main_window_events(window, window_config, on_loaded_extra=None, api=No
         if on_loaded_extra:
             on_loaded_extra()
         window.show()
-        # En arrière-plan : sombrit la barre de titre native (voir
-        # _darken_main_window_titlebar), sinon blanche par défaut et en
-        # décalage avec le thème sombre de l'application.
-        threading.Thread(target=_darken_main_window_titlebar, daemon=True).start()
+
+        if api is not None:
+            # En arrière-plan : trouve le handle natif de la fenêtre
+            # principale, nécessaire pour le redimensionnement natif par
+            # les bords/coins (voir start_window_resize) — la fenêtre
+            # étant frameless, Windows n'y répond plus tout seul.
+            def _finalize_main_window():
+                api._main_hwnd = _find_hwnd_by_title(MAIN_WINDOW_TITLE, timeout=5.0)
+
+            threading.Thread(target=_finalize_main_window, daemon=True).start()
 
         def _verify_after_show():
             # Filet de sécurité : si l'événement "maximized" ci-dessus ne
@@ -8199,6 +8227,16 @@ def _main_fast_path(window_config):
         background_color="#0a0e14",
         hidden=True,
         text_select=True,
+        # Sans barre de titre native (voir la barre personnalisée dans
+        # index.html) : bouton réduire personnalisé (voir minimize_window),
+        # fermeture déjà gérée via l'icône de la barre des tâches (voir
+        # _on_closing). easy_drag=False car le déplacement au clic n'importe
+        # où gênerait les interactions déjà existantes de l'interface (ex.
+        # réordonnement des commandes par clics) — seule la zone marquée
+        # "pywebview-drag-region" (le bandeau NOVAVOX à gauche de la barre du
+        # haut) permet de déplacer la fenêtre, comme une vraie barre de titre.
+        frameless=True,
+        easy_drag=False,
     )
     if window_config["x"] is not None and window_config["y"] is not None:
         create_window_kwargs["x"] = window_config["x"]
@@ -8326,6 +8364,16 @@ def _main_legacy_path(window_config):
         background_color="#0a0e14",
         hidden=True,
         text_select=True,
+        # Sans barre de titre native (voir la barre personnalisée dans
+        # index.html) : bouton réduire personnalisé (voir minimize_window),
+        # fermeture déjà gérée via l'icône de la barre des tâches (voir
+        # _on_closing). easy_drag=False car le déplacement au clic n'importe
+        # où gênerait les interactions déjà existantes de l'interface (ex.
+        # réordonnement des commandes par clics) — seule la zone marquée
+        # "pywebview-drag-region" (le bandeau NOVAVOX à gauche de la barre du
+        # haut) permet de déplacer la fenêtre, comme une vraie barre de titre.
+        frameless=True,
+        easy_drag=False,
     )
     if window_config["x"] is not None and window_config["y"] is not None:
         create_window_kwargs["x"] = window_config["x"]

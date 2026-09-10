@@ -37,11 +37,22 @@ html[data-theme="light"] {
 * { box-sizing: border-box; }
 body {
   margin: 0;
-  background: var(--bg);
+  /* Image de fond (voir gui/app-background.jpg) : ni étirée ni redimensionnée
+     (pas de background-size) donc affichée à sa taille native, centrée dans
+     la fenêtre — en agrandissant la fenêtre, on révèle progressivement plus
+     de l'image autour du centre plutôt que de la voir s'étirer/se déformer.
+     background-attachment: fixed la fixe par rapport à LA FENÊTRE (pas au
+     contenu de la page), pour qu'elle ne défile pas si la liste de commandes
+     devient assez longue pour faire apparaître une barre de défilement. */
+  background-color: var(--bg);
+  background-image: url('app-background.jpg');
+  background-position: center center;
+  background-repeat: no-repeat;
+  background-attachment: fixed;
   color: var(--text);
   font-family: var(--font-display);
   font-size: 15px;
-  transition: background 0.25s ease, color 0.25s ease;
+  transition: background-color 0.25s ease, color 0.25s ease;
 }
 .app {
   max-width: 1180px;

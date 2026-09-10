@@ -85,6 +85,55 @@ function hideSplashOverlay() {
 setTimeout(hideSplashOverlay, 30000);
 
 ready(init);
+initFramelessWindowResize();
+
+// ------------------------------------------------------------------
+// Redimensionnement par les bords/coins de la fenêtre principale : perdu
+// par défaut depuis qu'elle est frameless (voir create_window_kwargs côté
+// app.py — Windows gère normalement ça tout seul pour une fenêtre avec
+// bordure, plus une fois celle-ci retirée). Détecte la proximité du
+// curseur avec un bord/coin (aucune zone de redimensionnement visible
+// dessinée, comme la plupart des fenêtres modernes sans bordure), puis
+// délègue le redimensionnement réel à Windows lui-même via
+// start_window_resize (même principe que le glisser natif de la fenêtre,
+// voir pywebview-drag-region sur .brand dans index.html).
+// ------------------------------------------------------------------
+const RESIZE_EDGE_PX = 8;
+const RESIZE_CURSORS = {
+  left: "ew-resize", right: "ew-resize",
+  top: "ns-resize", bottom: "ns-resize",
+  "top-left": "nwse-resize", "bottom-right": "nwse-resize",
+  "top-right": "nesw-resize", "bottom-left": "nesw-resize",
+};
+
+function getResizeEdge(x, y, w, h) {
+  const nearLeft = x <= RESIZE_EDGE_PX;
+  const nearRight = x >= w - RESIZE_EDGE_PX;
+  const nearTop = y <= RESIZE_EDGE_PX;
+  const nearBottom = y >= h - RESIZE_EDGE_PX;
+  if (nearTop && nearLeft) return "top-left";
+  if (nearTop && nearRight) return "top-right";
+  if (nearBottom && nearLeft) return "bottom-left";
+  if (nearBottom && nearRight) return "bottom-right";
+  if (nearLeft) return "left";
+  if (nearRight) return "right";
+  if (nearTop) return "top";
+  if (nearBottom) return "bottom";
+  return null;
+}
+
+function initFramelessWindowResize() {
+  document.addEventListener("mousemove", (e) => {
+    const edge = getResizeEdge(e.clientX, e.clientY, window.innerWidth, window.innerHeight);
+    document.body.style.cursor = edge ? RESIZE_CURSORS[edge] : "";
+  });
+  document.addEventListener("mousedown", (e) => {
+    const edge = getResizeEdge(e.clientX, e.clientY, window.innerWidth, window.innerHeight);
+    if (!edge) return;
+    e.preventDefault();
+    window.pywebview.api.start_window_resize(edge);
+  });
+}
 
 async function init() {
   const bar = document.getElementById("splashBarFill");
@@ -191,6 +240,9 @@ function showUpdateBanner(version, url) {
 
 function bindEvents() {
   document.getElementById("themeToggle").addEventListener("click", toggleTheme);
+  document.getElementById("minimizeBtn").addEventListener("click", () => {
+    window.pywebview.api.minimize_window();
+  });
   document.getElementById("hideSystemLogToggle").addEventListener("change", onHideSystemLogToggle);
   document.getElementById("openSettingsBtn").addEventListener("click", openSettings);
   document.getElementById("closeSettingsBtn").addEventListener("click", closeSettings);
