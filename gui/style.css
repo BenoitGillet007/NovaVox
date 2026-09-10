@@ -96,6 +96,21 @@ body {
   padding-bottom: 4px;
 }
 .brand { display: flex; align-items: center; gap: 12px; }
+/* Zone de déplacement de la fenêtre (voir pywebview-drag-region dans
+   index.html) : curseur "déplacer" + poignée visuelle (même glyphe que
+   les poignées de réordonnement des commandes, ⠿) pour signaler que
+   c'est ici qu'il faut cliquer-glisser, puisque la barre de titre
+   native qui remplissait ce rôle a été retirée (fenêtre frameless). */
+.brand.pywebview-drag-region {
+  cursor: move;
+}
+.brand-drag-handle {
+  color: var(--muted);
+  font-size: 16px;
+  line-height: 1;
+  margin-right: 2px;
+  user-select: none;
+}
 .brand-glyph {
   font-size: 26px;
   color: var(--accent);

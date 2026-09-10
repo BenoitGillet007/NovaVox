@@ -94,9 +94,12 @@ initFramelessWindowResize();
 // bordure, plus une fois celle-ci retirée). Détecte la proximité du
 // curseur avec un bord/coin (aucune zone de redimensionnement visible
 // dessinée, comme la plupart des fenêtres modernes sans bordure), puis
-// délègue le redimensionnement réel à Windows lui-même via
-// start_window_resize (même principe que le glisser natif de la fenêtre,
-// voir pywebview-drag-region sur .brand dans index.html).
+// SIMULE le redimensionnement nous-mêmes en suivant les déplacements de
+// la souris (screenX/screenY, indépendants du contenu de la page) et en
+// appelant resize_main_window côté Python à chaque mouvement — la
+// technique native (WM_NCLBUTTONDOWN, celle qui fonctionne pour le
+// déplacement via pywebview-drag-region) ne déclenche pas de
+// redimensionnement réel sur ce type de fenêtre (FormBorderStyle.None).
 // ------------------------------------------------------------------
 const RESIZE_EDGE_PX = 8;
 const RESIZE_CURSORS = {
@@ -122,8 +125,35 @@ function getResizeEdge(x, y, w, h) {
   return null;
 }
 
+let resizeDrag = null;
+
 function initFramelessWindowResize() {
   document.addEventListener("mousemove", (e) => {
+    if (resizeDrag) {
+      const dx = e.screenX - resizeDrag.startScreenX;
+      const dy = e.screenY - resizeDrag.startScreenY;
+      let newW = resizeDrag.startW;
+      let newH = resizeDrag.startH;
+      let newX = null;
+      let newY = null;
+      if (resizeDrag.edge.includes("right")) newW = resizeDrag.startW + dx;
+      if (resizeDrag.edge.includes("left")) {
+        newW = resizeDrag.startW - dx;
+        newX = resizeDrag.startWinX + dx;
+      }
+      if (resizeDrag.edge.includes("bottom")) newH = resizeDrag.startH + dy;
+      if (resizeDrag.edge.includes("top")) {
+        newH = resizeDrag.startH - dy;
+        newY = resizeDrag.startWinY + dy;
+      }
+      window.pywebview.api.resize_main_window(
+        Math.round(newW),
+        Math.round(newH),
+        newX !== null ? Math.round(newX) : null,
+        newY !== null ? Math.round(newY) : null
+      );
+      return;
+    }
     const edge = getResizeEdge(e.clientX, e.clientY, window.innerWidth, window.innerHeight);
     document.body.style.cursor = edge ? RESIZE_CURSORS[edge] : "";
   });
@@ -131,7 +161,18 @@ function initFramelessWindowResize() {
     const edge = getResizeEdge(e.clientX, e.clientY, window.innerWidth, window.innerHeight);
     if (!edge) return;
     e.preventDefault();
-    window.pywebview.api.start_window_resize(edge);
+    resizeDrag = {
+      edge,
+      startScreenX: e.screenX,
+      startScreenY: e.screenY,
+      startW: window.outerWidth,
+      startH: window.outerHeight,
+      startWinX: window.screenX,
+      startWinY: window.screenY,
+    };
+  });
+  document.addEventListener("mouseup", () => {
+    resizeDrag = null;
   });
 }
 

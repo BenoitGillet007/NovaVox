@@ -2522,12 +2522,6 @@ class Api:
         self.stop_event = threading.Event()
         self.last_trigger = {}
         self._window = None
-        # Handle natif Windows de la fenêtre principale, trouvé une fois
-        # celle-ci affichée (voir _on_loaded/_finalize_main_window) —
-        # nécessaire pour le redimensionnement natif par les bords/coins
-        # (voir start_window_resize), la fenêtre étant frameless (Windows
-        # ne le gère plus tout seul sans barre de titre).
-        self._main_hwnd = None
         self.ai_history = []
         self.ai_voice_output = True
         ai_config = load_ai_config()
@@ -2835,41 +2829,37 @@ class Api:
         except Exception as e:
             self._log(f"[Erreur] Réduction de la fenêtre impossible : {e}", "error")
 
-    # Codes de zone Win32 standards (WinUser.h) pour WM_NCHITTEST/
-    # WM_NCLBUTTONDOWN, un par bord/coin — voir start_window_resize.
-    # Valeurs documentées Microsoft, identiques à celles utilisées par
-    # n'importe quelle fenêtre Windows normale pour son redimensionnement.
-    _RESIZE_HIT_TEST_CODES = {
-        "left": 10, "right": 11, "top": 12, "bottom": 15,
-        "top-left": 13, "top-right": 14, "bottom-left": 16, "bottom-right": 17,
-    }
-
-    def start_window_resize(self, edge):
-        """Démarre un redimensionnement natif Windows de la fenêtre
-        principale depuis le bord/coin indiqué (voir _RESIZE_HIT_TEST_CODES
-        pour les valeurs attendues). Nécessaire depuis que la fenêtre est
-        frameless (create_window_kwargs) : Windows ne gère alors plus tout
-        seul le redimensionnement par glisser des bords, contrairement à
-        une fenêtre normale avec barre de titre. Même technique native
-        (WM_NCLBUTTONDOWN) que overlay_start_native_drag/le glisser de la
-        fenêtre principale (pywebview-drag-region), mais avec un code de
-        zone HTLEFT/HTRIGHT/... au lieu de HTCAPTION — Windows prend alors
-        en charge tout le redimensionnement lui-même (contraintes de
-        taille min/max, échelle DPI...), exactement comme pour une
-        fenêtre classique. Le bord/coin est détecté côté JS selon la
-        position du curseur par rapport aux limites de la fenêtre (voir
-        script.js) : aucune zone de redimensionnement visible n'est
-        dessinée, comme la plupart des fenêtres modernes sans bordure."""
-        hit_test = self._RESIZE_HIT_TEST_CODES.get(edge)
-        if not hit_test or not self._main_hwnd:
-            return {"ok": False}
+    def resize_main_window(self, width, height, x=None, y=None):
+        """Redimensionne (et repositionne si besoin, quand on tire depuis
+        le bord gauche ou haut) la fenêtre principale pendant un
+        redimensionnement manuel par les bords/coins — voir
+        initFramelessWindowResize dans script.js, qui capture les
+        déplacements de la souris et calcule la nouvelle taille/position
+        cible. Nécessaire depuis que la fenêtre est frameless
+        (FormBorderStyle.None côté WinForms, voir create_window_kwargs) :
+        Windows ne gère alors plus tout seul le redimensionnement par
+        glisser des bords, contrairement à une fenêtre normale avec barre
+        de titre — un essai avec la technique native WM_NCLBUTTONDOWN
+        (celle qui fonctionne pour le déplacement, voir
+        pywebview-drag-region) n'a pas fonctionné pour le
+        redimensionnement sur ce type de fenêtre, d'où ce repli sur
+        window.resize()/window.move(), déjà utilisés ailleurs dans ce
+        fichier (voir _run_correction) et donc fiables."""
+        if not self._window:
+            return
         try:
-            ctypes.windll.user32.ReleaseCapture()
-            ctypes.windll.user32.SendMessageW(self._main_hwnd, self._WM_NCLBUTTONDOWN, hit_test, 0)
+            width = max(MAIN_WINDOW_MIN_SIZE[0], int(width))
+            height = max(MAIN_WINDOW_MIN_SIZE[1], int(height))
+            self._window.resize(width, height)
+            if x is not None and y is not None:
+                # window.move() multiplie les coordonnées reçues par
+                # l'échelle DPI de l'écran principal (bug documenté, voir
+                # _primary_monitor_scale) : compensé ici comme partout
+                # ailleurs où move() est utilisé dans ce fichier.
+                scale = _primary_monitor_scale()
+                self._window.move(round(int(x) / scale), round(int(y) / scale))
         except Exception as e:
-            self._log(f"[Erreur] Redimensionnement natif impossible : {e}", "error")
-            return {"ok": False}
-        return {"ok": True}
+            self._log(f"[Erreur] Redimensionnement de la fenêtre impossible : {e}", "error")
 
     # ------------------------------------------------- Appels JS -> ici
 
@@ -8067,16 +8057,6 @@ def _wire_main_window_events(window, window_config, on_loaded_extra=None, api=No
         if on_loaded_extra:
             on_loaded_extra()
         window.show()
-
-        if api is not None:
-            # En arrière-plan : trouve le handle natif de la fenêtre
-            # principale, nécessaire pour le redimensionnement natif par
-            # les bords/coins (voir start_window_resize) — la fenêtre
-            # étant frameless, Windows n'y répond plus tout seul.
-            def _finalize_main_window():
-                api._main_hwnd = _find_hwnd_by_title(MAIN_WINDOW_TITLE, timeout=5.0)
-
-            threading.Thread(target=_finalize_main_window, daemon=True).start()
 
         def _verify_after_show():
             # Filet de sécurité : si l'événement "maximized" ci-dessus ne
