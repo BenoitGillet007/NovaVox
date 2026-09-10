@@ -85,114 +85,6 @@ function hideSplashOverlay() {
 setTimeout(hideSplashOverlay, 30000);
 
 ready(init);
-initFramelessWindowResize();
-
-// ------------------------------------------------------------------
-// Redimensionnement par les bords/coins de la fenêtre principale : perdu
-// par défaut depuis qu'elle est frameless (voir create_window_kwargs côté
-// app.py — Windows gère normalement ça tout seul pour une fenêtre avec
-// bordure, plus une fois celle-ci retirée). Détecte la proximité du
-// curseur avec un bord/coin (aucune zone de redimensionnement visible
-// dessinée, comme la plupart des fenêtres modernes sans bordure), puis
-// SIMULE le redimensionnement nous-mêmes en suivant les déplacements de
-// la souris (screenX/screenY, indépendants du contenu de la page) et en
-// appelant resize_main_window côté Python à chaque mouvement — la
-// technique native (WM_NCLBUTTONDOWN, celle qui fonctionne pour le
-// déplacement via pywebview-drag-region) ne déclenche pas de
-// redimensionnement réel sur ce type de fenêtre (FormBorderStyle.None).
-// ------------------------------------------------------------------
-const RESIZE_EDGE_PX = 8;
-const RESIZE_CURSORS = {
-  left: "ew-resize", right: "ew-resize",
-  top: "ns-resize", bottom: "ns-resize",
-  "top-left": "nwse-resize", "bottom-right": "nwse-resize",
-  "top-right": "nesw-resize", "bottom-left": "nesw-resize",
-};
-
-function getResizeEdge(x, y, w, h) {
-  const nearLeft = x <= RESIZE_EDGE_PX;
-  const nearRight = x >= w - RESIZE_EDGE_PX;
-  const nearTop = y <= RESIZE_EDGE_PX;
-  const nearBottom = y >= h - RESIZE_EDGE_PX;
-  if (nearTop && nearLeft) return "top-left";
-  if (nearTop && nearRight) return "top-right";
-  if (nearBottom && nearLeft) return "bottom-left";
-  if (nearBottom && nearRight) return "bottom-right";
-  if (nearLeft) return "left";
-  if (nearRight) return "right";
-  if (nearTop) return "top";
-  if (nearBottom) return "bottom";
-  return null;
-}
-
-let resizeDrag = null;
-let resizeFrameRequested = false;
-
-// N'applique qu'une fois par frame d'affichage (requestAnimationFrame) au
-// lieu d'un appel pywebview.api à CHAQUE événement mousemove (qui peut se
-// déclencher bien plus vite que l'écran ne peut de toute façon afficher un
-// changement) — sans ça, le pont JS↔Python pouvait accumuler du retard et
-// donner l'impression que le redimensionnement ne suit pas le curseur.
-function applyResizeDrag(e) {
-  const dx = e.screenX - resizeDrag.startScreenX;
-  const dy = e.screenY - resizeDrag.startScreenY;
-  let newW = resizeDrag.startW;
-  let newH = resizeDrag.startH;
-  let newX = null;
-  let newY = null;
-  if (resizeDrag.edge.includes("right")) newW = resizeDrag.startW + dx;
-  if (resizeDrag.edge.includes("left")) {
-    newW = resizeDrag.startW - dx;
-    newX = resizeDrag.startWinX + dx;
-  }
-  if (resizeDrag.edge.includes("bottom")) newH = resizeDrag.startH + dy;
-  if (resizeDrag.edge.includes("top")) {
-    newH = resizeDrag.startH - dy;
-    newY = resizeDrag.startWinY + dy;
-  }
-  window.pywebview.api.resize_main_window(
-    Math.round(newW),
-    Math.round(newH),
-    newX !== null ? Math.round(newX) : null,
-    newY !== null ? Math.round(newY) : null
-  );
-}
-
-function initFramelessWindowResize() {
-  document.addEventListener("mousemove", (e) => {
-    if (resizeDrag) {
-      resizeDrag.lastEvent = e;
-      if (!resizeFrameRequested) {
-        resizeFrameRequested = true;
-        requestAnimationFrame(() => {
-          resizeFrameRequested = false;
-          if (resizeDrag) applyResizeDrag(resizeDrag.lastEvent);
-        });
-      }
-      return;
-    }
-    const edge = getResizeEdge(e.clientX, e.clientY, window.innerWidth, window.innerHeight);
-    document.body.style.cursor = edge ? RESIZE_CURSORS[edge] : "";
-  });
-  document.addEventListener("mousedown", (e) => {
-    const edge = getResizeEdge(e.clientX, e.clientY, window.innerWidth, window.innerHeight);
-    if (!edge) return;
-    e.preventDefault();
-    resizeDrag = {
-      edge,
-      startScreenX: e.screenX,
-      startScreenY: e.screenY,
-      startW: window.outerWidth,
-      startH: window.outerHeight,
-      startWinX: window.screenX,
-      startWinY: window.screenY,
-      lastEvent: e,
-    };
-  });
-  document.addEventListener("mouseup", () => {
-    resizeDrag = null;
-  });
-}
 
 async function init() {
   const bar = document.getElementById("splashBarFill");
@@ -299,9 +191,6 @@ function showUpdateBanner(version, url) {
 
 function bindEvents() {
   document.getElementById("themeToggle").addEventListener("click", toggleTheme);
-  document.getElementById("minimizeBtn").addEventListener("click", () => {
-    window.pywebview.api.minimize_window();
-  });
   document.getElementById("hideSystemLogToggle").addEventListener("change", onHideSystemLogToggle);
   document.getElementById("openSettingsBtn").addEventListener("click", openSettings);
   document.getElementById("closeSettingsBtn").addEventListener("click", closeSettings);
