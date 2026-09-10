@@ -38,15 +38,7 @@
   <div class="app">
 
     <header class="topbar">
-      <!-- pywebview-drag-region : classe reconnue nativement par pywebview
-           (fenêtre frameless, voir create_window_kwargs côté app.py) pour
-           déplacer la fenêtre au clic-glisser, comme une vraie barre de
-           titre. Volontairement limitée à .brand (aucun enfant cliquable)
-           plutôt qu'à tout le bandeau : posée sur .topbar-actions, elle
-           interceptait les clics sur les boutons avant qu'ils n'atteignent
-           leur propre gestionnaire. -->
-      <div class="brand pywebview-drag-region" title="Cliquer-glisser pour déplacer la fenêtre" data-i18n-title="topbar.dragTitle">
-        <span class="brand-drag-handle">⠿</span>
+      <div class="brand">
         <span class="brand-glyph">⬡</span>
         <div>
           <h1>NOVAVOX</h1>
@@ -59,11 +51,6 @@
         <button id="openGameLogBtn" class="btn btn-ghost btn-sm" type="button" data-i18n="topbar.gamelog">🛰 Game.log</button>
         <button id="openSettingsBtn" class="icon-btn" title="Réglages (modèle vocal, microphone)" data-i18n-title="topbar.settingsTitle">⚙️</button>
         <button id="themeToggle" class="icon-btn" title="Changer de thème" data-i18n-title="topbar.themeTitle">🌙</button>
-        <!-- Remplace le bouton "réduire" natif, disparu avec la barre de
-             titre (fenêtre frameless) — voir minimize_window côté app.py.
-             Pas de bouton "fermer" à côté : la fermeture se fait déjà via
-             l'icône de la barre des tâches. -->
-        <button id="minimizeBtn" class="icon-btn" title="Réduire" data-i18n-title="topbar.minimizeTitle">🗕</button>
       </div>
     </header>
 
