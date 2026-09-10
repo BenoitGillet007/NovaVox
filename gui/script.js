@@ -321,6 +321,9 @@ function bindEvents() {
 
   document.getElementById("piperInstallBtn").addEventListener("click", onPiperInstallClick);
   document.getElementById("radioEffectToggle").addEventListener("change", onRadioEffectToggle);
+  document.getElementById("piperShowAllLangsToggle").addEventListener("change", () => {
+    renderPiperVoices(piperLastVoices);
+  });
   document.getElementById("piperSpeedRange").addEventListener("input", onPiperSpeedInput);
   document.getElementById("piperSpeedRange").addEventListener("change", onPiperSpeedChange);
   document.getElementById("piperExpressivenessRange").addEventListener("input", onPiperExpressivenessInput);
@@ -2810,7 +2813,8 @@ async function refreshPiperStatus() {
   notInstalled.classList.add("hidden");
   tuning.classList.remove("hidden");
   voiceList.classList.remove("hidden");
-  renderPiperVoices(status.voices || []);
+  piperLastVoices = status.voices || [];
+  renderPiperVoices(piperLastVoices);
   loadOutputDevices();
 }
 
@@ -3299,25 +3303,27 @@ async function onPiperExpressivenessChange(e) {
 }
 
 // Sigle affiché devant chaque voix (FR/EN/NL/ES/IT/DE) pour distinguer
-// les langues d'un coup d'œil — toutes les voix Piper restent listées
-// (pas seulement celles de ui_language) car rien n'empêche d'utiliser une
-// voix d'une autre langue que celle de l'interface.
+// les langues d'un coup d'œil.
 const PIPER_LANG_TAG = { fr: "FR", en: "EN", nl: "NL", es: "ES", it: "IT", de: "DE" };
+
+// Dernière liste de voix reçue de piper_get_status, gardée en mémoire pour
+// pouvoir ré-afficher instantanément (sans rappel API) quand la case
+// "Afficher aussi les voix des autres langues" change.
+let piperLastVoices = [];
 
 function renderPiperVoices(voices) {
   const list = document.getElementById("piperVoiceList");
   list.innerHTML = "";
 
-  // Les voix de la langue actuellement choisie (voir currentUiLanguage,
-  // gui/i18n.js) remontent en premier, pour ne pas avoir à chercher la
-  // sienne au milieu des 5 autres langues.
-  const sorted = [...voices].sort((a, b) => {
-    const aMatch = a.lang === currentUiLanguage ? 0 : 1;
-    const bMatch = b.lang === currentUiLanguage ? 0 : 1;
-    return aMatch - bMatch;
-  });
+  // Par défaut, ne montre que les voix de la langue actuellement choisie
+  // pour l'interface (voir currentUiLanguage, gui/i18n.js) — sans quoi les
+  // 6 langues x plusieurs voix chacune se retrouvent mélangées. La case à
+  // cocher "Afficher aussi les voix des autres langues" permet de les
+  // révéler toutes, par ex. pour tester une voix dans une autre langue.
+  const showAll = document.getElementById("piperShowAllLangsToggle").checked;
+  const filtered = showAll ? voices : voices.filter((v) => v.lang === currentUiLanguage);
 
-  sorted.forEach((v) => {
+  filtered.forEach((v) => {
     const row = document.createElement("div");
     row.className = "piper-voice-row" + (v.id === state.piperVoice ? " active" : "");
     row.dataset.voiceId = v.id;
