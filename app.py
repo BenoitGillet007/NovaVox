@@ -2529,10 +2529,18 @@ def _patch_pywebview_transparency():
     try:
         from webview.platforms import winforms as _pywebview_winforms
         from System.Drawing import Color as _NetColor
+
+        # BrowserForm est imbriquée dans BrowserView (pas un attribut direct
+        # du module) — vérifié en usage réel : une première version de ce
+        # correctif visait webview.platforms.winforms.BrowserForm et
+        # plantait l'import des dépendances au démarrage avec
+        # AttributeError. Chaque étape ci-dessous est vérifiée séparément
+        # pour ne jamais reproduire cette casse si la structure interne de
+        # pywebview change encore à l'avenir.
+        _browser_form_cls = _pywebview_winforms.BrowserView.BrowserForm
+        _original_browserform_init = _browser_form_cls.__init__
     except Exception:
         return
-
-    _original_browserform_init = _pywebview_winforms.BrowserForm.__init__
 
     def _patched_browserform_init(self, window, cache_dir):
         _original_browserform_init(self, window, cache_dir)
@@ -2545,7 +2553,7 @@ def _patch_pywebview_transparency():
                 error_logger.error(f"Correctif de transparence pywebview inefficace sur cette fenêtre : {e}")
 
     try:
-        _pywebview_winforms.BrowserForm.__init__ = _patched_browserform_init
+        _browser_form_cls.__init__ = _patched_browserform_init
     except Exception:
         pass
 
