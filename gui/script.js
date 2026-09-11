@@ -217,6 +217,13 @@ function bindEvents() {
   document.getElementById("overlayEnabledToggle").addEventListener("change", onOverlayEnabledToggle);
   document.getElementById("autoLaunchWithScToggle").addEventListener("change", onAutoLaunchWithScToggle);
   document.getElementById("overlayEditModeBtn").addEventListener("click", onOverlayEditModeClick);
+  document.getElementById("overlayBgColorInput").addEventListener("change", onOverlayBgColorChange);
+  document.getElementById("overlayBgOpacityRange").addEventListener("input", onOverlayBgOpacityInput);
+  document.getElementById("overlayBgOpacityRange").addEventListener("change", onOverlayBgOpacityChange);
+  document.getElementById("overlayTextColorInput").addEventListener("change", onOverlayTextColorChange);
+  document.getElementById("overlayTextOpacityRange").addEventListener("input", onOverlayTextOpacityInput);
+  document.getElementById("overlayTextOpacityRange").addEventListener("change", onOverlayTextOpacityChange);
+  document.getElementById("overlayAppearanceResetBtn").addEventListener("click", onOverlayAppearanceReset);
   document.getElementById("modelSetupBrowseBtn").addEventListener("click", async () => {
     const path = await window.pywebview.api.browse_model();
     if (path) {
@@ -908,9 +915,59 @@ async function refreshOverlayUI() {
     document.getElementById("overlayEnabledToggle").checked = !!overlayState.enabled;
     document.getElementById("overlayEditRow").style.display = overlayState.enabled ? "flex" : "none";
     setOverlayEditButtonState(!!overlayState.editMode);
+    applyOverlayAppearanceToControls(overlayState);
   } catch (e) {
     // état overlay indisponible (ex. dépendances pas encore prêtes) : ignore
   }
+}
+
+// Reflète l'apparence actuelle (venue d'Api.overlay_get_state, ou d'un
+// repli sur les valeurs "defaults" qu'elle renvoie aussi — voir
+// onOverlayAppearanceReset) sur les 4 contrôles de Réglages, sans
+// déclencher leurs propres écouteurs "change"/"input" au passage.
+function applyOverlayAppearanceToControls(state) {
+  document.getElementById("overlayBgColorInput").value = state.bgColor;
+  document.getElementById("overlayBgOpacityRange").value = state.bgOpacity;
+  document.getElementById("overlayBgOpacityValue").textContent = `${state.bgOpacity} %`;
+  document.getElementById("overlayTextColorInput").value = state.textColor;
+  document.getElementById("overlayTextOpacityRange").value = state.textOpacity;
+  document.getElementById("overlayTextOpacityValue").textContent = `${state.textOpacity} %`;
+}
+
+async function onOverlayBgColorChange(e) {
+  await window.pywebview.api.overlay_set_appearance(e.target.value, null, null, null);
+}
+
+// Même logique que onTtsVolumeInput/onTtsVolumeChange : affichage en
+// direct pendant le glisser, appel Python seulement au relâchement.
+function onOverlayBgOpacityInput(e) {
+  document.getElementById("overlayBgOpacityValue").textContent = `${e.target.value} %`;
+}
+
+async function onOverlayBgOpacityChange(e) {
+  await window.pywebview.api.overlay_set_appearance(null, Number(e.target.value), null, null);
+}
+
+async function onOverlayTextColorChange(e) {
+  await window.pywebview.api.overlay_set_appearance(null, null, e.target.value, null);
+}
+
+function onOverlayTextOpacityInput(e) {
+  document.getElementById("overlayTextOpacityValue").textContent = `${e.target.value} %`;
+}
+
+async function onOverlayTextOpacityChange(e) {
+  await window.pywebview.api.overlay_set_appearance(null, null, null, Number(e.target.value));
+}
+
+async function onOverlayAppearanceReset() {
+  const state = await window.pywebview.api.overlay_get_state();
+  const d = state.defaults;
+  const res = await window.pywebview.api.overlay_set_appearance(d.bgColor, d.bgOpacity, d.textColor, d.textOpacity);
+  applyOverlayAppearanceToControls({
+    bgColor: res.bgColor, bgOpacity: res.bgOpacity, textColor: res.textColor, textOpacity: res.textOpacity,
+  });
+  appendLog("Couleurs de l'overlay réinitialisées.", "info");
 }
 
 async function refreshAutoLaunchUI() {

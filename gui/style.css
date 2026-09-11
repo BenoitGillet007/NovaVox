@@ -257,6 +257,26 @@ body {
   color: var(--muted);
   line-height: 1.4;
 }
+.overlay-appearance-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.overlay-appearance-row label {
+  flex-shrink: 0;
+}
+.overlay-appearance-row input[type="color"] {
+  width: 34px;
+  height: 26px;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--panel-alt);
+  cursor: pointer;
+}
+.overlay-appearance-row .mic-gain-value {
+  margin-left: auto;
+}
 .aec-toggle-label {
   display: flex !important;
   flex-direction: row !important;

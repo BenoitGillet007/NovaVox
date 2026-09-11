@@ -382,6 +382,34 @@
           </div>
 
           <div class="control-row">
+            <label>🎨 Apparence de l'overlay</label>
+            <div class="overlay-appearance-row">
+              <label for="overlayBgColorInput">Couleur du fond</label>
+              <input type="color" id="overlayBgColorInput" value="#0a0e14" />
+              <span class="mic-gain-value" id="overlayBgOpacityValue">72 %</span>
+            </div>
+            <input type="range" id="overlayBgOpacityRange" min="0" max="100" step="5" value="72" />
+
+            <div class="overlay-appearance-row">
+              <label for="overlayTextColorInput">Couleur du texte</label>
+              <input type="color" id="overlayTextColorInput" value="#dbe4ee" />
+              <span class="mic-gain-value" id="overlayTextOpacityValue">100 %</span>
+            </div>
+            <input type="range" id="overlayTextOpacityRange" min="0" max="100" step="5" value="100" />
+
+            <button type="button" class="btn btn-ghost btn-sm" id="overlayAppearanceResetBtn">
+              ↺ Réinitialiser les couleurs
+            </button>
+            <p class="mic-gain-hint">
+              Ne change que le fond du panneau et le texte neutre (libellés, dernière
+              phrase reconnue) — les couleurs de statut (vert = actif, rouge = coupé,
+              jaune = avertissement...) restent fixes pour rester lisibles d'un coup
+              d'œil pendant le jeu. Aperçu visible directement sur l'overlay si celui-ci
+              est déjà ouvert.
+            </p>
+          </div>
+
+          <div class="control-row">
             <label>🚀 Lancement automatique</label>
             <label class="ai-voice-toggle">
               <input type="checkbox" id="autoLaunchWithScToggle" />
