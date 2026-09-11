@@ -5062,17 +5062,6 @@ class Api:
         payload = json.dumps({
             "contents": contents,
             "systemInstruction": {"parts": [{"text": system_text}]},
-            # Grounding avec la recherche Google (fonctionnalité officielle
-            # de l'API Gemini, pas à confondre avec la tentative précédente
-            # d'interroger le wiki communautaire par nos propres moyens,
-            # retirée) : laisse Gemini chercher sur le web en direct quand
-            # il le juge utile, au lieu de répondre uniquement depuis ce
-            # qu'il a mémorisé pendant son entraînement — la principale
-            # raison pour laquelle les réponses manquaient de chiffres
-            # précis et à jour sur des sujets de niche (ex. caractéristiques
-            # d'un vaisseau) comparé à Gemini utilisé directement sur
-            # Google, qui bénéficie de cette même recherche.
-            "tools": [{"google_search": {}}],
             "generationConfig": {
                 "maxOutputTokens": max_output_tokens,
                 "temperature": 0.7,
