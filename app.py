@@ -32,6 +32,7 @@ import tempfile
 import threading
 import time
 import tkinter as tk
+import traceback
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -5302,12 +5303,16 @@ class Api:
             except Exception:
                 msg = str(e)
             reply = f"[Erreur] Gemini a renvoyé une erreur ({e.code}) : {msg}"
+            self._log(reply, "error")
         except TimeoutError:
             reply = "[Erreur] Gemini n'a pas répondu en moins de 60 secondes. Réessaie."
+            self._log(reply, "error")
         except (urllib.error.URLError, OSError) as e:
             reply = f"[Erreur] Impossible de contacter Gemini ({e}). Vérifie ta connexion internet."
+            self._log(reply, "error")
         except Exception as e:
             reply = f"[Erreur] {e}"
+            self._log_error("Réponse Gemini", e)
 
         self.gemini_history.append({"role": "assistant", "content": reply})
         if len(self.gemini_history) > AI_MAX_HISTORY_MESSAGES:
@@ -5980,7 +5985,7 @@ class Api:
             try:
                 self._speak_via_piper(item["text"], item.get("piper_voice"))
             except Exception as e:
-                self._log(f"[Erreur voix] {e}", "error")
+                self._log_error("Synthèse vocale (Piper)", e)
             finally:
                 self._is_speaking = False
                 self._speech_mute_until = time.time() + self._speech_mute_grace
@@ -6154,6 +6159,18 @@ class Api:
     def _log(self, msg, kind="info"):
         self._push(f"appendLog({json.dumps(msg)}, {json.dumps(kind)})")
         self._append_session_log_line(kind, msg)
+
+    def _log_error(self, context, e):
+        """Comme _log(msg, "error") — même message visible dans le panneau
+        "journal système" et dans l'archive de session —, mais journalise
+        EN PLUS la trace complète (traceback) dans erreurs.log. Le message
+        d'erreur seul (str(e)) affiché à l'utilisateur suffit rarement à
+        comprendre après coup la cause réelle d'un problème signalé — à
+        appeler depuis un bloc "except Exception as e:" (s'appuie sur
+        traceback.format_exc(), qui a besoin du contexte d'exception en
+        cours)."""
+        self._log(f"[Erreur] {context} : {e}", "error")
+        error_logger.error(f"{context}\n{traceback.format_exc()}")
 
     @staticmethod
     def _prepare_session_log_file():
@@ -6655,7 +6672,7 @@ class Api:
             # correspondance de commande directe en tient compte.
             recognizer.SetMaxAlternatives(3)
         except Exception as e:
-            self._log(f"[Erreur] Impossible de charger le modèle : {e}", "error")
+            self._log_error("Impossible de charger le modèle", e)
             self.listening = False
             self._status("error", "Erreur", str(e))
             return
@@ -6748,7 +6765,7 @@ class Api:
                             self._log(f"Reconnu : « {text} »", "info")
                             self._handle_text(text, alt_texts=alt_texts[1:])
         except Exception as e:
-            self._log(f"[Erreur audio] {e}", "error")
+            self._log_error("Boucle d'écoute audio interrompue", e)
         finally:
             self.listening = False
             self._sync_aec_state()
@@ -7042,7 +7059,7 @@ class Api:
                 mouse_pressed = True
             time.sleep(self.HOLD_DURATION_SECONDS if hold else 0.05)
         except Exception as e:
-            self._log(f"[Erreur touche] '{keys_str}' : {e}", "error")
+            self._log_error(f"Envoi de la touche '{keys_str}'", e)
         finally:
             # Relâchement inconditionnel de tout ce qui a été enfoncé,
             # même partiellement — chaque relâchement est isolé dans son
@@ -7940,15 +7957,21 @@ def _install_crash_handler():
     pour : 1) l'écrire dans crash_log.txt à côté de l'exécutable, et
     2) afficher une fenêtre d'alerte Windows explicite, plutôt que de
     laisser l'utilisateur face à un programme qui se ferme sans un mot."""
-    import traceback
 
-    def _excepthook(exc_type, exc_value, exc_tb):
+    def _excepthook(exc_type, exc_value, exc_tb, thread_name=None):
         log_path = os.path.join(BASE_DIR, "crash_log.txt")
         details = "".join(traceback.format_exception(exc_type, exc_value, exc_tb))
         try:
             with open(log_path, "a", encoding="utf-8") as f:
                 f.write("\n" + "=" * 60 + "\n")
                 f.write(time.strftime("%Y-%m-%d %H:%M:%S") + "\n")
+                # Version et thread d'origine : utile pour savoir tout de
+                # suite si un plantage rapporté vient d'une version déjà
+                # corrigée, et s'il vient du thread principal (interface
+                # figée) ou d'un thread secondaire (ex. écoute micro,
+                # réponse Gemini — l'appli elle-même peut alors rester
+                # utilisable, seule cette fonctionnalité est tombée).
+                f.write(f"NovaVox v{get_app_version()} — thread : {thread_name or threading.current_thread().name}\n")
                 f.write(details)
         except Exception:
             pass
@@ -7969,7 +7992,10 @@ def _install_crash_handler():
     # sys.excepthook ne couvre que le thread principal ; les erreurs dans
     # les threads secondaires (splash, écoute micro, TTS...) passent par
     # threading.excepthook (Python 3.8+).
-    threading.excepthook = lambda args: _excepthook(args.exc_type, args.exc_value, args.exc_traceback)
+    threading.excepthook = lambda args: _excepthook(
+        args.exc_type, args.exc_value, args.exc_traceback,
+        thread_name=args.thread.name if args.thread else None,
+    )
 
 
 if __name__ == "__main__":
