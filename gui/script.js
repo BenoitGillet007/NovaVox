@@ -290,6 +290,7 @@ function bindEvents() {
   });
   document.getElementById("geminiRecheckBtn").addEventListener("click", refreshGeminiStatus);
   document.getElementById("geminiClearBtn").addEventListener("click", clearGeminiChat);
+  document.getElementById("geminiTextQuestionForm").addEventListener("submit", onSendGeminiTextQuestion);
   document.getElementById("geminiRenameBtn").addEventListener("click", renameGemini);
   document.getElementById("geminiUserNameBtn").addEventListener("click", editUserName);
   document.getElementById("geminiVoiceOutputToggle").addEventListener("change", (e) => {
@@ -2697,6 +2698,20 @@ function geminiReceiveMessage(text) {
 async function clearGeminiChat() {
   await window.pywebview.api.gemini_clear_history();
   document.getElementById("geminiChat").innerHTML = "";
+}
+
+// Envoie une question TAPÉE (pas dite à voix haute) à Gemini — voir le
+// champ de saisie sous la discussion. geminiUserMessage/geminiReceiveMessage
+// (déjà utilisées pour les questions posées à l'oral) affichent la
+// conversation normalement, il n'y a rien de plus à faire ici côté rendu.
+async function onSendGeminiTextQuestion(e) {
+  e.preventDefault();
+  const input = document.getElementById("geminiTextQuestionInput");
+  const question = input.value.trim();
+  if (!question) return;
+  const speak = document.getElementById("geminiTextQuestionSpeakToggle").checked;
+  input.value = "";
+  await window.pywebview.api.gemini_ask_text(question, speak);
 }
 
 async function loadGeminiSettingsTab() {
