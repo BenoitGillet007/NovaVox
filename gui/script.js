@@ -1928,7 +1928,6 @@ function setStatus(status, label, sub) {
     state.listening = true;
     state.micGateOpen = true;
   }
-  updateAiWakeDot();
   updateMicGateBadge();
 }
 
