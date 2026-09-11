@@ -2,7 +2,7 @@ NOVAVOX — Notes de mise à jour
 ==============================
 v0.2.7
 ------
-- Correction : cliquer sur « Engager l'écoute » restait bloqué sur « Chargement... » indéfiniment, sans jamais démarrer réellement l'écoute (régression introduite par le retrait de l'assistant Nova, qui laissait un appel JS orphelin déclenchant une erreur silencieuse à chaque changement de statut).
+- Correction : bug critique, cliquer sur « Engager l'écoute » restait bloqué sur « Chargement... » indéfiniment, sans jamais démarrer réellement l'écoute (régression introduite par le retrait de l'assistant Nova, qui laissait un appel JS orphelin déclenchant une erreur silencieuse à chaque changement de statut).
 v0.2.6
 ------
 - Premiers pas vers une interface multilingue : nouveau sélecteur de langue dans Réglages > NovaVox (anglais, néerlandais, espagnol, italien, allemand, en plus du français). Change la langue de la barre du haut, du formulaire d'ajout de commande, des onglets de réglages et de l'onglet NovaVox, ainsi que la langue des réponses de l'assistant IA (Nova/Gemini) et de la détection question/commande. Modèles de reconnaissance vocale (Vosk) et voix de synthèse (Piper) désormais disponibles pour chacune de ces langues, à choisir séparément dans les réglages. Le reste de l'interface (panneaux détaillés, journal système) reste pour l'instant en français — à traduire progressivement dans une prochaine mise à jour.
