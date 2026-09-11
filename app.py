@@ -5032,17 +5032,30 @@ class Api:
         plus longue qu'un mot) qui identifie, en anglais, le nom de
         l'entité précise du jeu visée par la question — quelle que soit sa
         langue d'origine — pour pouvoir chercher la bonne page sur le wiki
-        (en anglais). Renvoie None si la question ne vise pas une entité
-        précise, ou en cas d'erreur/timeout."""
+        (en anglais). Inclut les derniers échanges de l'historique pour
+        gérer les questions de suivi qui ne renomment pas l'entité (ex.
+        « il a combien de HP de bouclier ? » après une question sur le
+        Hull C). Renvoie None si aucune entité précise ne se dégage, ou en
+        cas d'erreur/timeout."""
+        history_lines = [
+            f"{'User' if m['role'] == 'user' else 'Assistant'}: {m['content']}"
+            for m in self.gemini_history[-6:]
+        ]
+        transcript = "\n".join(history_lines) if history_lines else f"User: {question}"
         prompt = (
             "You help find the right article on the English Star Citizen wiki "
             "(starcitizen.tools) for a user's question, which may be written in "
-            "any language. Reply with ONLY the English name of the one specific "
-            "Star Citizen game entity (ship, ground vehicle, weapon, item, "
-            "location, star system, organization...) the question is about, "
-            "suitable as a wiki search term. If the question is not about one "
-            "specific named entity, reply with exactly: NONE\n\n"
-            f"Question: {question}"
+            "any language. Below is the end of a conversation with a Star "
+            "Citizen voice assistant (the last line is the current question) — "
+            "use the earlier lines only to resolve a question that refers back "
+            "to something already named, without repeating it (e.g. \"how much "
+            "shield HP does it have?\" right after a ship was named).\n\n"
+            f"{transcript}\n\n"
+            "Reply with ONLY the English name of the one specific Star Citizen "
+            "game entity (ship, ground vehicle, weapon, item, location, star "
+            "system, organization...) the LAST question is about, suitable as "
+            "a wiki search term. If it is not about one specific named entity, "
+            "reply with exactly: NONE"
         )
         payload = json.dumps({
             "contents": [{"role": "user", "parts": [{"text": prompt}]}],
