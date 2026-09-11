@@ -5081,7 +5081,13 @@ class Api:
         # plus proche de la consommation réelle du quota Google.
         self._gemini_record_request()
         try:
-            with urllib.request.urlopen(req, timeout=30) as resp:
+            # 60s (pas 30) : le plafond de tokens de réponse a été relevé
+            # (voir AI_NUM_PREDICT_BY_LENGTH) pour ne plus tronquer les
+            # réponses sur des questions techniques — Gemini peut donc
+            # légitimement mettre plus de temps à répondre, et dépassait
+            # parfois l'ancien délai de 30s en usage réel alors même que
+            # la génération se terminait normalement.
+            with urllib.request.urlopen(req, timeout=60) as resp:
                 data = json.loads(resp.read().decode("utf-8"))
             candidates = data.get("candidates") or []
             reply = ""
@@ -5098,7 +5104,7 @@ class Api:
                 msg = str(e)
             reply = f"[Erreur] Gemini a renvoyé une erreur ({e.code}) : {msg}"
         except TimeoutError:
-            reply = "[Erreur] Gemini n'a pas répondu en moins de 30 secondes. Réessaie."
+            reply = "[Erreur] Gemini n'a pas répondu en moins de 60 secondes. Réessaie."
         except (urllib.error.URLError, OSError) as e:
             reply = f"[Erreur] Impossible de contacter Gemini ({e}). Vérifie ta connexion internet."
         except Exception as e:
