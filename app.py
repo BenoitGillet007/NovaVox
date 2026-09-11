@@ -18,6 +18,7 @@ import ctypes
 import ctypes.wintypes
 import datetime
 import gc
+import html
 import json
 import logging
 import math
@@ -32,6 +33,7 @@ import threading
 import time
 import tkinter as tk
 import urllib.error
+import urllib.parse
 import urllib.request
 import wave
 import zipfile
@@ -201,6 +203,16 @@ GEMINI_DAILY_LIMIT_DEFAULT = 500
 # vers les serveurs Google avec cette clé — NovaVox ne les relaie pas et
 # ne voit jamais leur contenu.
 GEMINI_API_KEY_URL = "https://aistudio.google.com/app/apikey"
+
+# Wiki communautaire Star Citizen (non affilié à CIG, voir docs.star-citizen.wiki
+# pour le projet et starcitizen.tools pour le wiki lui-même — un MediaWiki
+# classique, donc son API standard action=query/action=parse, PAS l'API
+# structurée api.star-citizen.wiki qui, elle, s'est révélée inutilisable pour
+# une recherche en langage libre : voir _gemini_wiki_reference_block). Sert de
+# contexte best-effort ajouté au prompt Gemini quand la question porte sur une
+# entité précise du jeu (vaisseau, objet...) — jamais bloquant si indisponible.
+STARCITIZEN_WIKI_API_URL = "https://starcitizen.tools/api.php"
+STARCITIZEN_WIKI_EXTRACT_MAX_CHARS = 4000
 
 try:
     # Le quota RPD de Google se réinitialise à minuit heure du Pacifique
@@ -4980,6 +4992,135 @@ class Api:
         self._persist_ai_config()
         return used, limit
 
+    def _gemini_wiki_reference_block(self, question, api_key, quota_used, quota_limit):
+        """Best-effort : si la question semble viser une entité précise du
+        jeu (vaisseau, objet, lieu...), cherche l'article correspondant sur
+        le wiki communautaire Star Citizen (starcitizen.tools, en anglais)
+        et renvoie un bloc de contexte à ajouter au prompt système de
+        Gemini. Ne consomme le quota gratuit que s'il reste au moins 2
+        requêtes (1 pour cette recherche + 1 pour la vraie réponse) — et à
+        la moindre erreur réseau/timeout, renvoie une chaîne vide sans
+        jamais empêcher la réponse normale."""
+        if quota_used + 2 > quota_limit:
+            return ""
+        try:
+            term = self._wiki_extract_entity_en(question, api_key)
+            self._gemini_record_request()
+            if not term:
+                return ""
+            title = self._wiki_search_page_title(term)
+            if not title:
+                logging.info("Wiki SC : aucune page trouvée pour %r", term)
+                return ""
+            extract = self._wiki_fetch_page_text(title)
+            if not extract:
+                logging.info("Wiki SC : page %r trouvée mais vide une fois extraite", title)
+                return ""
+        except Exception as e:
+            logging.info("Wiki SC : recherche de contexte ignorée (%s)", e)
+            return ""
+        logging.info("Wiki SC : contexte pour %r -> page %r (%d caractères)", term, title, len(extract))
+        return (
+            f"\n\nAdditional reference (Star Citizen community wiki, in English, page \"{title}\"). "
+            "Use this information if it helps answer the user's question, but always reply in "
+            "the language specified above — never switch to English just because this "
+            f"reference is in English:\n{extract}"
+        )
+
+    def _wiki_extract_entity_en(self, question, api_key):
+        """Petit appel Gemini séparé et rapide (10s max, réponse à peine
+        plus longue qu'un mot) qui identifie, en anglais, le nom de
+        l'entité précise du jeu visée par la question — quelle que soit sa
+        langue d'origine — pour pouvoir chercher la bonne page sur le wiki
+        (en anglais). Renvoie None si la question ne vise pas une entité
+        précise, ou en cas d'erreur/timeout."""
+        prompt = (
+            "You help find the right article on the English Star Citizen wiki "
+            "(starcitizen.tools) for a user's question, which may be written in "
+            "any language. Reply with ONLY the English name of the one specific "
+            "Star Citizen game entity (ship, ground vehicle, weapon, item, "
+            "location, star system, organization...) the question is about, "
+            "suitable as a wiki search term. If the question is not about one "
+            "specific named entity, reply with exactly: NONE\n\n"
+            f"Question: {question}"
+        )
+        payload = json.dumps({
+            "contents": [{"role": "user", "parts": [{"text": prompt}]}],
+            "generationConfig": {
+                "maxOutputTokens": 30,
+                "thinkingConfig": {"thinkingLevel": "minimal"},
+            },
+        }).encode("utf-8")
+        url = f"{GEMINI_API_BASE_URL}/models/{self.gemini_model}:generateContent"
+        req = urllib.request.Request(
+            url, data=payload,
+            headers={"Content-Type": "application/json", "x-goog-api-key": api_key},
+            method="POST",
+        )
+        with urllib.request.urlopen(req, timeout=10) as resp:
+            data = json.loads(resp.read().decode("utf-8"))
+        candidates = data.get("candidates") or []
+        if not candidates:
+            return None
+        parts = candidates[0].get("content", {}).get("parts", [])
+        term = "".join(p.get("text", "") for p in parts).strip()
+        if not term or term.upper() == "NONE":
+            return None
+        return term
+
+    @staticmethod
+    def _wiki_search_page_title(term):
+        """Interroge la recherche standard MediaWiki du wiki (langage
+        libre, contrairement à l'API structurée api.star-citizen.wiki dont
+        l'endpoint de recherche s'est révélé déprécié et inutilisable pour
+        des questions complètes) et renvoie le titre de la meilleure page
+        correspondante, ou None si aucun résultat."""
+        params = urllib.parse.urlencode({
+            "action": "query", "list": "search", "srsearch": term,
+            "srlimit": 1, "format": "json",
+        })
+        req = urllib.request.Request(
+            f"{STARCITIZEN_WIKI_API_URL}?{params}",
+            headers={"User-Agent": "Mozilla/5.0"},
+        )
+        with urllib.request.urlopen(req, timeout=8) as resp:
+            data = json.loads(resp.read().decode("utf-8"))
+        results = data.get("query", {}).get("search") or []
+        return results[0]["title"] if results else None
+
+    @classmethod
+    def _wiki_fetch_page_text(cls, title):
+        """Récupère le HTML rendu de la page (action=parse) et le
+        convertit en texte simple, tronqué à
+        STARCITIZEN_WIKI_EXTRACT_MAX_CHARS pour ne pas peser sur le budget
+        de tokens de la réponse Gemini (voir AI_NUM_PREDICT_BY_LENGTH)."""
+        params = urllib.parse.urlencode({
+            "action": "parse", "page": title, "format": "json",
+            "prop": "text", "redirects": 1,
+        })
+        req = urllib.request.Request(
+            f"{STARCITIZEN_WIKI_API_URL}?{params}",
+            headers={"User-Agent": "Mozilla/5.0"},
+        )
+        with urllib.request.urlopen(req, timeout=8) as resp:
+            data = json.loads(resp.read().decode("utf-8"))
+        raw_html = data.get("parse", {}).get("text", {}).get("*", "")
+        if not raw_html:
+            return None
+        return cls._wiki_html_to_text(raw_html)[:STARCITIZEN_WIKI_EXTRACT_MAX_CHARS]
+
+    @staticmethod
+    def _wiki_html_to_text(raw_html):
+        """Convertit le HTML brut d'une page du wiki en texte simple :
+        retire scripts/styles puis toutes les balises, et normalise les
+        espaces. Volontairement basique (pas de parseur HTML dédié) —
+        suffisant pour donner un extrait lisible à Gemini, pas pour un
+        rendu fidèle."""
+        text = re.sub(r"(?is)<(script|style)[^>]*>.*?</\1>", " ", raw_html)
+        text = re.sub(r"(?s)<[^>]+>", " ", text)
+        text = html.unescape(text)
+        return re.sub(r"\s+", " ", text).strip()
+
     def _gemini_ask(self, question):
         """Envoie une question à Gemini (déclenchée par son mot
         d'activation vocal, voir _handle_text) et pousse la conversation
@@ -5039,10 +5180,15 @@ class Api:
         if self._game_log_watcher:
             game_state_block = game_state_to_prompt_block(self._game_log_watcher.get_state())
 
+        question = ""
+        if self.gemini_history and self.gemini_history[-1]["role"] == "user":
+            question = self.gemini_history[-1]["content"]
+        wiki_block = self._gemini_wiki_reference_block(question, api_key, used, limit) if question else ""
+
         system_text = ai_system_prompt(
             self.gemini_name, self.gemini_custom_context, self.user_name, self.gemini_response_length,
             lang=self.ui_language,
-        ) + game_state_block
+        ) + game_state_block + wiki_block
 
         # Gemini attend tout l'historique à chaque appel, mais son rôle
         # assistant s'appelle "model", pas "assistant".
