@@ -2485,6 +2485,14 @@ class Api:
     """Pont entre l'interface web (JS) et la logique Python."""
 
     def __init__(self):
+        # Copie en mémoire de tout ce qui passe par _log() pendant la
+        # session, pour pouvoir l'archiver dans un fichier à la fermeture
+        # (voir _save_session_log_archive, appelée depuis _on_closing) —
+        # le panneau "journal système" de l'interface, lui, ne garde rien
+        # une fois l'appli fermée. Doit être initialisé en tout premier :
+        # plusieurs étapes de construction ci-dessous (ex.
+        # _start_game_log_watcher) appellent déjà self._log().
+        self._log_history = []
         global _active_profile_id
         migrated_pid = _ensure_profiles_migrated()
         _active_profile_id = migrated_pid or load_active_profile_id()
@@ -2770,12 +2778,6 @@ class Api:
         # activé effaçait la préférence et l'overlay ne revenait plus au
         # lancement suivant.
         self._app_closing = False
-        # Copie en mémoire de tout ce qui passe par _log() (voir plus bas)
-        # pendant la session, pour pouvoir l'archiver dans un fichier au
-        # moment de fermer l'application (voir save_session_log_archive,
-        # appelée depuis _on_closing) — le panneau "journal système" de
-        # l'interface, lui, ne garde rien une fois l'appli fermée.
-        self._log_history = []
         self._overlay_saved_enabled = overlay_config.get("enabled", False)
         self._overlay_saved_pos = (overlay_config.get("x"), overlay_config.get("y"))
         # Lignes de l'overlay cochées/décochées par l'utilisateur en mode
