@@ -5059,7 +5059,14 @@ class Api:
             f"\n\nAdditional reference (Star Citizen community wiki, in English, page \"{title}\"). "
             "Use this information if it helps answer the user's question, but always reply in "
             "the language specified above — never switch to English just because this "
-            f"reference is in English:\n{extract}"
+            "reference is in English. IMPORTANT: for any specific figure about this topic "
+            "(stats, counts, capacities, prices...), state ONLY what this reference actually "
+            "says — never add another specific figure from memory, even one you believe you "
+            "know, since this is a live-service game whose stats change with balance patches "
+            "and your training data can be outdated. If the user asks about a specific detail "
+            "that isn't in this reference, say plainly that you don't have that exact figure "
+            "rather than guessing one:\n"
+            f"{extract}"
         )
 
     def _wiki_extract_entity_en(self, question, api_key):
