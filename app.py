@@ -818,6 +818,37 @@ OVERLAY_DEFAULT_HEIGHT = 250
 # voir Api.overlay_set_row_visible. Toutes visibles par défaut.
 OVERLAY_ROW_KEYS = ("time", "listening", "mic", "phrase", "zone", "lastCmd")
 
+# Apparence personnalisable de l'overlay (voir Api.overlay_set_appearance
+# et overlaySetAppearance côté overlay.html) : couleur/transparence du
+# fond du panneau, et couleur/transparence du texte "neutre" (libellés et
+# phrase reconnue) — PAS les couleurs de statut (vert/jaune/rouge/gris des
+# valeurs Écoute/Micro/Zone...), qui restent fixes pour ne pas perdre leur
+# sens à la lecture rapide de l'overlay pendant le jeu. Valeurs par défaut
+# = les couleurs d'origine, codées en dur jusqu'ici dans overlay.html.
+OVERLAY_DEFAULT_BG_COLOR = "#0a0e14"
+OVERLAY_DEFAULT_BG_OPACITY = 72  # %, correspond à l'ancien rgba(10,14,20,0.72) figé
+OVERLAY_DEFAULT_TEXT_COLOR = "#dbe4ee"
+OVERLAY_DEFAULT_TEXT_OPACITY = 100  # %
+_HEX_COLOR_RE = re.compile(r"^#[0-9a-fA-F]{6}$")
+
+
+def _validate_hex_color(value, fallback):
+    """Ne garde `value` que s'il s'agit bien d'un "#rrggbb" valide —
+    repli sur `fallback` sinon (JSON corrompu/édité à la main, valeur
+    absente...), jamais d'exception ni de couleur invalide transmise au
+    CSS de l'overlay."""
+    return value if isinstance(value, str) and _HEX_COLOR_RE.match(value) else fallback
+
+
+def _validate_opacity_percent(value, fallback):
+    """Ramène `value` (attendu 0-100) dans cet intervalle, ou renvoie
+    `fallback` si ce n'est pas un nombre exploitable."""
+    try:
+        return max(0, min(100, int(round(float(value)))))
+    except (TypeError, ValueError):
+        return fallback
+
+
 def _version_tuple(v):
     """Convertit '0.1.2' en (0, 1, 2) pour une comparaison fiable
     (une comparaison de chaînes échouerait sur '0.9' vs '0.10')."""
@@ -2141,6 +2172,8 @@ def load_overlay_config():
     config = {
         "enabled": False, "x": None, "y": None,
         "visible_rows": {k: True for k in OVERLAY_ROW_KEYS},
+        "bg_color": OVERLAY_DEFAULT_BG_COLOR, "bg_opacity": OVERLAY_DEFAULT_BG_OPACITY,
+        "text_color": OVERLAY_DEFAULT_TEXT_COLOR, "text_opacity": OVERLAY_DEFAULT_TEXT_OPACITY,
     }
     if os.path.exists(OVERLAY_CONFIG_FILE):
         try:
@@ -2160,12 +2193,17 @@ def load_overlay_config():
                 for k in OVERLAY_ROW_KEYS:
                     if k in saved_rows:
                         config["visible_rows"][k] = bool(saved_rows[k])
+            config["bg_color"] = _validate_hex_color(data.get("bg_color"), OVERLAY_DEFAULT_BG_COLOR)
+            config["bg_opacity"] = _validate_opacity_percent(data.get("bg_opacity"), OVERLAY_DEFAULT_BG_OPACITY)
+            config["text_color"] = _validate_hex_color(data.get("text_color"), OVERLAY_DEFAULT_TEXT_COLOR)
+            config["text_opacity"] = _validate_opacity_percent(data.get("text_opacity"), OVERLAY_DEFAULT_TEXT_OPACITY)
         except Exception:
             pass
     return config
 
 
-def save_overlay_config(enabled, x=None, y=None, visible_rows=None):
+def save_overlay_config(enabled, x=None, y=None, visible_rows=None,
+                         bg_color=None, bg_opacity=None, text_color=None, text_opacity=None):
     data = {"enabled": bool(enabled)}
     if x is not None and y is not None:
         try:
@@ -2179,6 +2217,19 @@ def save_overlay_config(enabled, x=None, y=None, visible_rows=None):
         # garantit un fichier toujours cohérent avec load_overlay_config,
         # qui s'attend à retrouver chaque clé.
         data["visible_rows"] = {k: bool(visible_rows.get(k, True)) for k in OVERLAY_ROW_KEYS}
+    # bg_color/bg_opacity/text_color/text_opacity : toujours fournis
+    # ensemble par Api._persist_overlay_config (jamais individuellement,
+    # contrairement à x/y/visible_rows ci-dessus) — chaque appel réécrit
+    # donc le fichier en entier plutôt que de le fusionner avec l'existant,
+    # pour rester aussi simple que le reste de cette fonction.
+    if bg_color is not None:
+        data["bg_color"] = _validate_hex_color(bg_color, OVERLAY_DEFAULT_BG_COLOR)
+    if bg_opacity is not None:
+        data["bg_opacity"] = _validate_opacity_percent(bg_opacity, OVERLAY_DEFAULT_BG_OPACITY)
+    if text_color is not None:
+        data["text_color"] = _validate_hex_color(text_color, OVERLAY_DEFAULT_TEXT_COLOR)
+    if text_opacity is not None:
+        data["text_opacity"] = _validate_opacity_percent(text_opacity, OVERLAY_DEFAULT_TEXT_OPACITY)
     try:
         with open(OVERLAY_CONFIG_FILE, "w", encoding="utf-8") as f:
             json.dump(data, f, ensure_ascii=False, indent=2)
@@ -2792,6 +2843,13 @@ class Api:
         self.overlay_visible_rows = dict(
             overlay_config.get("visible_rows") or {k: True for k in OVERLAY_ROW_KEYS}
         )
+        # Apparence personnalisable de l'overlay (voir overlay_set_appearance
+        # et OVERLAY_DEFAULT_* ci-dessus pour le détail de la portée exacte
+        # — fond + texte "neutre" seulement, pas les couleurs de statut).
+        self.overlay_bg_color = overlay_config.get("bg_color", OVERLAY_DEFAULT_BG_COLOR)
+        self.overlay_bg_opacity = overlay_config.get("bg_opacity", OVERLAY_DEFAULT_BG_OPACITY)
+        self.overlay_text_color = overlay_config.get("text_color", OVERLAY_DEFAULT_TEXT_COLOR)
+        self.overlay_text_opacity = overlay_config.get("text_opacity", OVERLAY_DEFAULT_TEXT_OPACITY)
         # Dernier état connu de chaque info affichée, pour pouvoir tout
         # renvoyer d'un coup dès que l'overlay (ré)ouvre — sinon il
         # resterait vide jusqu'au prochain changement de chaque info.
@@ -6259,7 +6317,58 @@ class Api:
         return {
             "enabled": self.overlay_enabled, "editMode": self.overlay_edit_mode,
             "visibleRows": self.overlay_visible_rows,
+            "bgColor": self.overlay_bg_color, "bgOpacity": self.overlay_bg_opacity,
+            "textColor": self.overlay_text_color, "textOpacity": self.overlay_text_opacity,
+            "defaults": {
+                "bgColor": OVERLAY_DEFAULT_BG_COLOR, "bgOpacity": OVERLAY_DEFAULT_BG_OPACITY,
+                "textColor": OVERLAY_DEFAULT_TEXT_COLOR, "textOpacity": OVERLAY_DEFAULT_TEXT_OPACITY,
+            },
         }
+
+    def overlay_set_appearance(self, bg_color=None, bg_opacity=None, text_color=None, text_opacity=None):
+        """Change la couleur/transparence du fond et/ou du texte "neutre"
+        de l'overlay (libellés et phrase reconnue — pas les couleurs de
+        statut, voir le commentaire sur OVERLAY_DEFAULT_BG_COLOR plus
+        haut). Chaque paramètre omis (None) garde sa valeur actuelle —
+        permet à l'interface d'appeler cette méthode séparément pour
+        chaque curseur/sélecteur de couleur sans devoir renvoyer les 4 à
+        chaque fois. Applique le changement immédiatement si l'overlay est
+        ouvert, et persiste toujours (même overlay fermé)."""
+        if bg_color is not None:
+            self.overlay_bg_color = _validate_hex_color(bg_color, self.overlay_bg_color)
+        if bg_opacity is not None:
+            self.overlay_bg_opacity = _validate_opacity_percent(bg_opacity, self.overlay_bg_opacity)
+        if text_color is not None:
+            self.overlay_text_color = _validate_hex_color(text_color, self.overlay_text_color)
+        if text_opacity is not None:
+            self.overlay_text_opacity = _validate_opacity_percent(text_opacity, self.overlay_text_opacity)
+        self._persist_overlay_config(self.overlay_enabled, *self._overlay_saved_pos)
+        self._push_overlay_appearance()
+        return {
+            "ok": True, "bgColor": self.overlay_bg_color, "bgOpacity": self.overlay_bg_opacity,
+            "textColor": self.overlay_text_color, "textOpacity": self.overlay_text_opacity,
+        }
+
+    def _persist_overlay_config(self, enabled, x=None, y=None):
+        """Sauvegarde l'ÉTAT COMPLET de l'overlay (position/activation,
+        lignes visibles, apparence) — centralise ce que faisaient jusqu'ici
+        les appels directs à save_overlay_config un peu partout, chacun ne
+        passant que visible_rows : ajouter l'apparence là où c'était encore
+        nécessaire, plutôt qu'ici, aurait risqué d'écraser silencieusement
+        les couleurs déjà enregistrées à la prochaine sauvegarde déclenchée
+        par autre chose (ex. déplacer l'overlay)."""
+        save_overlay_config(
+            enabled, x, y,
+            visible_rows=self.overlay_visible_rows,
+            bg_color=self.overlay_bg_color, bg_opacity=self.overlay_bg_opacity,
+            text_color=self.overlay_text_color, text_opacity=self.overlay_text_opacity,
+        )
+
+    def _push_overlay_appearance(self):
+        self._overlay_push(
+            f"overlaySetAppearance({json.dumps(self.overlay_bg_color)}, {self.overlay_bg_opacity}, "
+            f"{json.dumps(self.overlay_text_color)}, {self.overlay_text_opacity})"
+        )
 
     def overlay_set_row_visible(self, row_key, visible):
         """Appelé depuis la case à cocher d'une ligne de l'overlay (visible
@@ -6273,10 +6382,7 @@ class Api:
         if row_key not in OVERLAY_ROW_KEYS:
             return {"ok": False, "error": "Ligne inconnue."}
         self.overlay_visible_rows[row_key] = bool(visible)
-        save_overlay_config(
-            self.overlay_enabled, *self._overlay_saved_pos,
-            visible_rows=self.overlay_visible_rows,
-        )
+        self._persist_overlay_config(self.overlay_enabled, *self._overlay_saved_pos)
         return {"ok": True, "visibleRows": self.overlay_visible_rows}
 
     def overlay_resize_to_content(self, height):
@@ -6518,7 +6624,7 @@ class Api:
 
         def _on_overlay_moved(x_, y_):
             self._overlay_saved_pos = (x_, y_)
-            save_overlay_config(True, x_, y_, visible_rows=self.overlay_visible_rows)
+            self._persist_overlay_config(True, x_, y_)
 
         def _on_overlay_closing():
             if self._overlay_window is not this_window:
@@ -6544,7 +6650,7 @@ class Api:
                 # quelle pour qu'il revienne automatiquement au prochain
                 # lancement.
                 return
-            save_overlay_config(False, *self._overlay_saved_pos, visible_rows=self.overlay_visible_rows)
+            self._persist_overlay_config(False, *self._overlay_saved_pos)
 
         try:
             self._overlay_window.events.loaded += _on_overlay_loaded
@@ -6553,7 +6659,7 @@ class Api:
         except Exception:
             pass
 
-        save_overlay_config(True, x, y, visible_rows=self.overlay_visible_rows)
+        self._persist_overlay_config(True, x, y)
 
     def _finalize_overlay_window(self):
         hwnd = _find_hwnd_by_title(OVERLAY_WINDOW_TITLE, timeout=5.0)
@@ -6576,7 +6682,7 @@ class Api:
         self._overlay_window = None
         self.overlay_enabled = False
         self._overlay_hwnd = None
-        save_overlay_config(False, *self._overlay_saved_pos, visible_rows=self.overlay_visible_rows)
+        self._persist_overlay_config(False, *self._overlay_saved_pos)
 
     def _overlay_push(self, js):
         if self._overlay_window and self.overlay_enabled:
@@ -6589,6 +6695,10 @@ class Api:
         """Renvoie d'un coup tout ce qui est déjà connu vers l'overlay —
         utilisé à sa (ré)ouverture, pour qu'il n'apparaisse jamais vide
         en attendant le prochain changement de chaque info."""
+        # Apparence (couleurs/transparence) en tout premier, avant même la
+        # visibilité des lignes : évite un flash visible avec les couleurs
+        # par défaut avant que les couleurs personnalisées ne s'appliquent.
+        self._push_overlay_appearance()
         # Visibilité des lignes (cases à cocher, voir overlay.html) :
         # poussée en tout premier, avant les valeurs elles-mêmes, pour que
         # les lignes masquées le restent dès l'affichage initial plutôt
