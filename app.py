@@ -5028,22 +5028,31 @@ class Api:
         if quota_used + 2 > quota_limit:
             self._log("[Info] Wiki SC : recherche sautée (quota gratuit du jour presque épuisé).", "info")
             return ""
+        # Nom de l'étape en cours, pour que le message d'erreur ci-dessous
+        # précise LAQUELLE des 3 requêtes réseau a échoué (ex. un timeout)
+        # plutôt qu'un simple "ignorée (...)" sans indiquer où — utile pour
+        # repérer, par exemple, si c'est systématiquement la même étape qui
+        # dépasse son délai, ce qui indiquerait qu'il est trop court plutôt
+        # qu'un vrai problème ponctuel.
+        step = "identification de l'entité (appel Gemini)"
         try:
             term = self._wiki_extract_entity_en(question, api_key)
             self._gemini_record_request()
             if not term:
                 self._log("[Info] Wiki SC : aucune entité précise identifiée dans la question.", "info")
                 return ""
+            step = "recherche de la page (wiki)"
             title = self._wiki_search_page_title(term)
             if not title:
                 self._log(f"[Info] Wiki SC : aucune page trouvée pour « {term} ».", "info")
                 return ""
+            step = "récupération du contenu de la page (wiki)"
             extract = self._wiki_fetch_page_text(title)
             if not extract:
                 self._log(f"[Info] Wiki SC : page « {title} » sans contenu exploitable (vide ou désambiguïsation).", "info")
                 return ""
         except Exception as e:
-            self._log(f"[Info] Wiki SC : recherche de contexte ignorée ({e}).", "info")
+            self._log(f"[Info] Wiki SC : recherche de contexte ignorée pendant {step} ({e}).", "info")
             return ""
         self._log(f"[Info] Wiki SC : contexte pour « {term} » → page « {title} » ({len(extract)} caractères).", "info")
         return (
