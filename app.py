@@ -6372,6 +6372,30 @@ class Api:
             f"overlaySetAppearance({json.dumps(self.overlay_bg_color)}, {self.overlay_bg_opacity}, "
             f"{json.dumps(self.overlay_text_color)}, {self.overlay_text_opacity})"
         )
+        self._nudge_overlay_repaint()
+
+    def _nudge_overlay_repaint(self):
+        """Force Windows (DWM) à recomposer réellement la fenêtre overlay
+        avec ce qu'il y a derrière après un changement d'apparence.
+        Constaté en usage réel : un simple changement de propriété CSS via
+        JavaScript sur une fenêtre déjà affichée et en couche (voir
+        _finalize_overlay_window) ne suffit pas toujours à déclencher
+        cette recomposition — contrairement à un changement plus "lourd"
+        comme une classe togglée (ex. #panel.mic-cut), qui lui se
+        répercute bien. Un minuscule redimensionnement aller-retour
+        (1px, invisible à l'œil) force Windows à rafraîchir la surface
+        composée. Best-effort : ne fait rien si l'overlay n'est pas
+        affiché, ignore toute erreur plutôt que de faire échouer
+        l'appelant."""
+        if not self._overlay_window or not self.overlay_enabled:
+            return
+        try:
+            w, h = self._overlay_window.width, self._overlay_window.height
+            self._overlay_window.resize(w, h + 1)
+            time.sleep(0.03)  # laisse Windows traiter le 1er redimensionnement avant de revenir
+            self._overlay_window.resize(w, h)
+        except Exception:
+            pass
 
     def overlay_set_row_visible(self, row_key, visible):
         """Appelé depuis la case à cocher d'une ligne de l'overlay (visible
