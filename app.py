@@ -5005,52 +5005,6 @@ class Api:
         ).start()
         return {"ok": True}
 
-    def _log_starcitizen_wiki_diagnostic(self, query):
-        """Diagnostic TEMPORAIRE : interroge la Galactapedia du Star
-        Citizen Wiki (api.star-citizen.wiki, wiki communautaire non
-        officiel) et journalise la réponse BRUTE reçue dans le journal
-        système, sans rien injecter dans le prompt de Gemini ni influencer
-        sa réponse d'aucune façon — appelé sur un thread séparé, ne bloque
-        ni ne ralentit _gemini_reply_thread. Objectif : voir la structure
-        exacte réellement renvoyée par /galactapedia/search (impossible à
-        vérifier depuis l'environnement de développement, réseau bloqué
-        vers ce domaine) avant de retenter une intégration correcte dans
-        le prompt. À retirer une fois ce diagnostic terminé, que la
-        réponse observée serve ou non de base à une nouvelle tentative."""
-        query = (query or "").strip()
-        if not query:
-            return
-        try:
-            payload = json.dumps({"query": query}).encode("utf-8")
-            req = urllib.request.Request(
-                "https://api.star-citizen.wiki/api/galactapedia/search",
-                data=payload,
-                headers={
-                    "Content-Type": "application/json",
-                    "Accept": "application/json",
-                    # Premier essai sans en-tête dédié rejeté par une 403
-                    # Forbidden — probablement le User-Agent générique
-                    # "Python-urllib/3.x" par défaut, souvent bloqué par
-                    # les protections anti-bot (Cloudflare...) même pour
-                    # une API publique sans authentification.
-                    "User-Agent": "NovaVox/1.0 (+https://github.com/ammoniak07/NovaVox)",
-                },
-                method="POST",
-            )
-            with urllib.request.urlopen(req, timeout=6) as resp:
-                raw = resp.read().decode("utf-8", errors="replace")
-            self._log(f"[Diagnostic Wiki] Réponse pour « {query} » : {raw[:1500]}", "info")
-        except urllib.error.HTTPError as e:
-            try:
-                body = e.read().decode("utf-8", errors="replace")[:500]
-            except Exception:
-                body = "(corps de réponse illisible)"
-            self._log(
-                f"[Diagnostic Wiki] Échec HTTP {e.code} pour « {query} » : {body}", "info"
-            )
-        except Exception as e:
-            self._log(f"[Diagnostic Wiki] Échec de la requête pour « {query} » : {e}", "info")
-
     def _gemini_reply_thread(self, force_voice_output=None):
         api_key = (self.gemini_api_key or "").strip()
         if not api_key:
@@ -5080,15 +5034,6 @@ class Api:
             self.gemini_history.append({"role": "assistant", "content": reply})
             self._push(f"geminiReceiveMessage({json.dumps(reply)})")
             return
-
-        # Diagnostic temporaire (voir _log_starcitizen_wiki_diagnostic) :
-        # sur un thread séparé, ne retarde jamais la vraie réponse Gemini.
-        if self.gemini_history and self.gemini_history[-1].get("role") == "user":
-            threading.Thread(
-                target=self._log_starcitizen_wiki_diagnostic,
-                args=(self.gemini_history[-1].get("content", ""),),
-                daemon=True,
-            ).start()
 
         game_state_block = ""
         if self._game_log_watcher:
