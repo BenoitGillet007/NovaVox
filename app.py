@@ -596,6 +596,62 @@ def ai_system_prompt(name, custom_context=None, user_name=None, response_length=
             "verstehen, kannst aber auch über allgemeine Themen sprechen."
         )
 
+    # Repérée en usage réel (voir discussion) : sans recherche web activée,
+    # une simple affirmation de l'utilisateur contredisant une réponse
+    # factuelle précédente ("vérifie, moi j'ai 96 SCU") faisait
+    # systématiquement changer d'avis le modèle et confirmer le chiffre de
+    # l'utilisateur, vrai ou faux — comportement de complaisance classique
+    # des modèles de langage. Cette consigne ne l'élimine pas totalement
+    # (aucune garantie avec un LLM) mais le réduit nettement en pratique.
+    if lang == "fr":
+        base += (
+            "\n\nSi l'utilisateur affirme qu'une de tes réponses factuelles est "
+            "fausse sans donner de source ni d'explication, ne change pas "
+            "immédiatement d'avis pour lui faire plaisir : reste ferme sur ce "
+            "que tu sais, ou indique poliment ton incertitude, plutôt que de "
+            "simplement confirmer ce qu'il dit."
+        )
+    elif lang == "en":
+        base += (
+            "\n\nIf the user claims one of your factual answers is wrong "
+            "without giving a source or explanation, don't immediately change "
+            "your answer just to please them: stick with what you know, or "
+            "politely state your uncertainty, rather than simply agreeing "
+            "with whatever they say."
+        )
+    elif lang == "nl":
+        base += (
+            "\n\nAls de gebruiker beweert dat een van je feitelijke "
+            "antwoorden fout is zonder een bron of uitleg te geven, verander "
+            "dan niet meteen van antwoord om hem/haar tevreden te stellen: "
+            "blijf bij wat je weet, of geef beleefd je onzekerheid aan, in "
+            "plaats van gewoon te bevestigen wat hij/zij zegt."
+        )
+    elif lang == "es":
+        base += (
+            "\n\nSi el usuario afirma que una de tus respuestas basadas en "
+            "hechos es incorrecta sin dar una fuente o explicación, no "
+            "cambies de opinión de inmediato solo por complacerlo: mantente "
+            "firme en lo que sabes, o indica educadamente tu incertidumbre, "
+            "en lugar de simplemente confirmar lo que dice."
+        )
+    elif lang == "it":
+        base += (
+            "\n\nSe l'utente afferma che una delle tue risposte fattuali è "
+            "sbagliata senza fornire una fonte o una spiegazione, non "
+            "cambiare subito risposta solo per accontentarlo: resta fermo su "
+            "ciò che sai, oppure indica educatamente la tua incertezza, "
+            "invece di limitarti a confermare quello che dice."
+        )
+    else:  # "de"
+        base += (
+            "\n\nWenn der Nutzer behauptet, eine deiner sachlichen Antworten "
+            "sei falsch, ohne eine Quelle oder Erklärung zu nennen, ändere "
+            "deine Antwort nicht sofort nur, um ihm/ihr zu gefallen: bleibe "
+            "bei dem, was du weißt, oder äußere höflich deine Unsicherheit, "
+            "statt einfach zuzustimmen."
+        )
+
     user_name = (user_name or "").strip()
     if user_name:
         if lang == "fr":
