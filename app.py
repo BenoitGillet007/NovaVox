@@ -2491,6 +2491,65 @@ def ensure_dependencies(status_state, on_status=None):
     return True
 
 
+def _patch_pywebview_transparency():
+    """Corrige un vrai défaut de pywebview (vérifié directement dans son
+    code source, versions 5.2 ET 6.2.1) qui l'empêche d'obtenir une
+    fenêtre réellement transparente sur Windows avec le moteur EdgeChrome
+    (WebView2), quel que soit `transparent=True` :
+
+    - En 5.2 (celle utilisée par NovaVox, voir requirements.txt) :
+      BrowserForm.__init__ pose `TransparencyKey` sur une couleur "magique"
+      (rouge pur) — une technique de transparence PAR CLÉ DE COULEUR (tout
+      pixel de cette couleur exacte devient invisible, tout le reste reste
+      100% opaque), pas un vrai fondu alpha. Le contenu semi-transparent
+      que WebView2 rend lui-même (nos couleurs rgba(), voir --ov-bg/
+      --ov-text dans overlay.html) ne correspond jamais exactement à cette
+      couleur magique, donc ne déclenche jamais la transparence — il reste
+      composé contre le canevas interne de WebView2 (blanc par défaut),
+      jamais contre le bureau/jeu réel derrière la fenêtre. (Explique
+      aussi, rétroactivement, le fond rouge observé lors d'une tentative
+      précédente de ce fichier : appeler nous-mêmes
+      SetLayeredWindowAttributes entrait en conflit avec ce mécanisme de
+      clé de couleur déjà posé par pywebview, révélant sa couleur magique
+      normalement invisible.)
+    - En 6.2.1, ce mécanisme a été retiré, mais rien ne l'a remplacé :
+      BackColor n'est même plus défini du tout pour une fenêtre
+      transparente, laissant le repli par défaut de WinForms (opaque).
+
+    Dans les deux cas, la fenêtre n'a JAMAIS `AllowTransparency = True` —
+    le réglage WinForms qui active la VRAIE composition alpha avec le
+    bureau (DWM), gérable indépendamment du canal alpha que WebView2 rend
+    déjà correctement en interne. Cette fonction reprend la main juste
+    après la construction de la fenêtre (BrowserForm.__init__ déjà
+    entièrement exécuté) pour poser ce réglage manquant et neutraliser
+    l'ancien mécanisme par clé de couleur s'il est présent — sans toucher
+    au reste du comportement de pywebview. Best-effort total : silencieuse
+    en cas d'échec (version de pywebview trop différente, structure
+    interne changée...), jamais bloquante pour le reste de l'application."""
+    try:
+        from webview.platforms import winforms as _pywebview_winforms
+        from System.Drawing import Color as _NetColor
+    except Exception:
+        return
+
+    _original_browserform_init = _pywebview_winforms.BrowserForm.__init__
+
+    def _patched_browserform_init(self, window, cache_dir):
+        _original_browserform_init(self, window, cache_dir)
+        if getattr(window, "transparent", False) and getattr(self, "browser", None):
+            try:
+                self.TransparencyKey = _NetColor.Empty  # neutralise l'éventuelle clé de couleur posée ci-dessus
+                self.AllowTransparency = True
+                self.BackColor = _NetColor.FromArgb(0, 0, 0, 0)
+            except Exception as e:
+                error_logger.error(f"Correctif de transparence pywebview inefficace sur cette fenêtre : {e}")
+
+    try:
+        _pywebview_winforms.BrowserForm.__init__ = _patched_browserform_init
+    except Exception:
+        pass
+
+
 def _import_runtime_dependencies():
     """Importe réellement les modules dans les globales du module, une fois
     ensure_dependencies() passé. Les méthodes de Api y font référence par
@@ -2555,6 +2614,7 @@ def _import_runtime_dependencies():
 
     import webview as _webview
     webview = _webview
+    _patch_pywebview_transparency()
 
     try:
         import pystray as _pystray
