@@ -5000,28 +5000,32 @@ class Api:
         Gemini. Ne consomme le quota gratuit que s'il reste au moins 2
         requêtes (1 pour cette recherche + 1 pour la vraie réponse) — et à
         la moindre erreur réseau/timeout, renvoie une chaîne vide sans
-        jamais empêcher la réponse normale."""
+        jamais empêcher la réponse normale. Les traces ci-dessous passent
+        par self._log (pas le module logging) pour apparaître dans le
+        panneau "journal système" de l'interface — le seul journal que
+        l'utilisateur voit réellement, voir _log juste au-dessus de
+        log_error."""
         if quota_used + 2 > quota_limit:
-            logging.info("Wiki SC : recherche sautée (quota gratuit du jour presque épuisé)")
+            self._log("[Info] Wiki SC : recherche sautée (quota gratuit du jour presque épuisé).", "info")
             return ""
         try:
             term = self._wiki_extract_entity_en(question, api_key)
             self._gemini_record_request()
             if not term:
-                logging.info("Wiki SC : aucune entité précise identifiée dans la question")
+                self._log("[Info] Wiki SC : aucune entité précise identifiée dans la question.", "info")
                 return ""
             title = self._wiki_search_page_title(term)
             if not title:
-                logging.info("Wiki SC : aucune page trouvée pour %r", term)
+                self._log(f"[Info] Wiki SC : aucune page trouvée pour « {term} ».", "info")
                 return ""
             extract = self._wiki_fetch_page_text(title)
             if not extract:
-                logging.info("Wiki SC : page %r trouvée mais vide une fois extraite", title)
+                self._log(f"[Info] Wiki SC : page « {title} » trouvée mais vide une fois extraite.", "info")
                 return ""
         except Exception as e:
-            logging.info("Wiki SC : recherche de contexte ignorée (%s)", e)
+            self._log(f"[Info] Wiki SC : recherche de contexte ignorée ({e}).", "info")
             return ""
-        logging.info("Wiki SC : contexte pour %r -> page %r (%d caractères)", term, title, len(extract))
+        self._log(f"[Info] Wiki SC : contexte pour « {term} » → page « {title} » ({len(extract)} caractères).", "info")
         return (
             f"\n\nAdditional reference (Star Citizen community wiki, in English, page \"{title}\"). "
             "Use this information if it helps answer the user's question, but always reply in "
