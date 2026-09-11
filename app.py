@@ -6578,9 +6578,14 @@ class Api:
         )
         if not transparent:
             # background_color n'est utile (et n'est accepté par
-            # pywebview) qu'en mode non-transparent — cohérent avec le
-            # thème sombre du reste de l'appli plutôt qu'un blanc brut.
-            create_kwargs["background_color"] = "#0a0e14"
+            # pywebview) qu'en mode non-transparent : ce mode ("déplacer")
+            # n'a de toute façon jamais de vraie transparence système (voir
+            # la note plus haut), donc la personnalisation de l'apparence
+            # (voir overlay_set_appearance) ne peut pas s'y montrer
+            # fidèlement — on s'en approche en reprenant au moins la
+            # couleur de fond choisie, au lieu d'un #0a0e14 fixe qui
+            # jurerait avec elle pendant qu'on repositionne l'overlay.
+            create_kwargs["background_color"] = self.overlay_bg_color
         if x is not None and y is not None:
             create_kwargs["x"] = x
             create_kwargs["y"] = y
