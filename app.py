@@ -2526,6 +2526,14 @@ def _patch_pywebview_transparency():
     au reste du comportement de pywebview. Best-effort total : silencieuse
     en cas d'échec (version de pywebview trop différente, structure
     interne changée...), jamais bloquante pour le reste de l'application."""
+    # Diagnostic : les 3 tentatives précédentes (propriétés posées, puis
+    # recréation forcée du handle) n'ont produit ni erreur dans erreurs.log
+    # ni effet visuel — ce qui peut aussi bien vouloir dire "posé mais sans
+    # effet" que "jamais posé du tout" (le premier bloc try/except
+    # ci-dessous ne loggait rien en cas d'échec). Chaque étape logge
+    # maintenant explicitement dans erreurs.log (le seul journal que
+    # l'utilisateur peut consulter depuis ce code, en dehors de la classe
+    # Api) pour lever cette ambiguïté une bonne fois pour toutes.
     try:
         from webview.platforms import winforms as _pywebview_winforms
         from System.Drawing import Color as _NetColor
@@ -2540,11 +2548,17 @@ def _patch_pywebview_transparency():
         # pywebview change encore à l'avenir.
         _browser_form_cls = _pywebview_winforms.BrowserView.BrowserForm
         _original_browserform_init = _browser_form_cls.__init__
-    except Exception:
+    except Exception as e:
+        error_logger.error(f"[Diag transparence] Correctif non installé (préparation) : {e}")
         return
+    error_logger.error("[Diag transparence] Correctif préparé avec succès (imports + BrowserForm trouvée).")
 
     def _patched_browserform_init(self, window, cache_dir):
         _original_browserform_init(self, window, cache_dir)
+        error_logger.error(
+            f"[Diag transparence] __init__ patché exécuté — fenêtre {getattr(window, 'title', '?')!r}, "
+            f"transparent={getattr(window, 'transparent', None)!r}, browser={getattr(self, 'browser', None) is not None}."
+        )
         if getattr(window, "transparent", False) and getattr(self, "browser", None):
             try:
                 self.TransparencyKey = _NetColor.Empty  # neutralise l'éventuelle clé de couleur posée ci-dessus
@@ -2564,13 +2578,18 @@ def _patch_pywebview_transparency():
                 current_style = self.FormBorderStyle
                 self.FormBorderStyle = _NetWinForms.FormBorderStyle.FixedSingle
                 self.FormBorderStyle = current_style
+                error_logger.error(
+                    f"[Diag transparence] Propriétés posées sans erreur — AllowTransparency lu après coup = "
+                    f"{self.AllowTransparency!r}, BackColor = {self.BackColor!r}."
+                )
             except Exception as e:
-                error_logger.error(f"Correctif de transparence pywebview inefficace sur cette fenêtre : {e}")
+                error_logger.error(f"[Diag transparence] Échec en posant les propriétés : {e}")
 
     try:
         _browser_form_cls.__init__ = _patched_browserform_init
-    except Exception:
-        pass
+        error_logger.error("[Diag transparence] __init__ remplacé avec succès.")
+    except Exception as e:
+        error_logger.error(f"[Diag transparence] Échec du remplacement de __init__ : {e}")
 
 
 def _import_runtime_dependencies():
