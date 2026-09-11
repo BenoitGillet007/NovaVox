@@ -1038,6 +1038,28 @@ body {
   border-color: var(--accent);
   color: #04161c;
 }
+.ai-text-question-form {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 10px;
+}
+.ai-text-question-form input[type="text"] {
+  flex: 1;
+  min-width: 0;
+  background: var(--panel-alt);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--text);
+  font-family: var(--font-display);
+  font-size: 13px;
+  padding: 9px 12px;
+}
+.ai-text-question-form input[type="text"]:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-dim);
+}
 .modal-footer {
   display: flex;
   align-items: center;

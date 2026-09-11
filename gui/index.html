@@ -364,7 +364,7 @@
             <label class="ai-voice-toggle">
               <input type="checkbox" id="overlayEnabledToggle" />
               Afficher une fenêtre superposée à Star Citizen (micro, dernière phrase,
-              zone, dernières commandes, quota Gemini)
+              zone, dernières commandes)
             </label>
             <div class="listen-hotkey-row" id="overlayEditRow" style="display:none;">
               <button type="button" class="btn btn-ghost btn-sm" id="overlayEditModeBtn">
@@ -869,6 +869,20 @@
         </div>
 
         <div class="ai-chat" id="geminiChat"></div>
+
+        <form class="ai-text-question-form" id="geminiTextQuestionForm">
+          <input
+            type="text"
+            id="geminiTextQuestionInput"
+            placeholder="Écris ta question à Gemini ici..."
+            autocomplete="off"
+          />
+          <label class="ai-voice-toggle" style="margin: 0;" title="Lire la réponse à cette question à voix haute">
+            <input type="checkbox" id="geminiTextQuestionSpeakToggle" checked />
+            🔊
+          </label>
+          <button class="btn btn-accent btn-sm" id="geminiTextQuestionSendBtn" type="submit">Envoyer</button>
+        </form>
 
         <div class="modal-footer">
           <label class="ai-voice-toggle">
