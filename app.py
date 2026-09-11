@@ -202,19 +202,6 @@ GEMINI_DAILY_LIMIT_DEFAULT = 500
 # ne voit jamais leur contenu.
 GEMINI_API_KEY_URL = "https://aistudio.google.com/app/apikey"
 
-# Wiki communautaire (non officiel, pas affilié à Cloud Imperium Games —
-# https://github.com/StarCitizenWiki/API) : sa Galactapedia couvre le lore
-# de l'univers (vaisseaux, systèmes, factions, personnages...), utile pour
-# donner à Gemini des informations à jour plutôt que ses seules
-# connaissances générales, potentiellement datées. Endpoint et routes
-# vérifiés via le code source du projet (routes/api/api_v2.php) ; le
-# format exact des champs retournés n'a en revanche pas pu être vérifié en
-# conditions réelles depuis cet environnement (accès réseau à
-# api.star-citizen.wiki bloqué ici) — voir _search_starcitizen_wiki, qui
-# reste silencieuse en cas de surprise plutôt que de faire échouer la
-# question posée à Gemini.
-STARCITIZEN_WIKI_API_BASE = "https://api.star-citizen.wiki/api"
-
 try:
     # Le quota RPD de Google se réinitialise à minuit heure du Pacifique
     # (Californie), pas sur une fenêtre glissante de 24h — voir
@@ -5018,58 +5005,6 @@ class Api:
         ).start()
         return {"ok": True}
 
-    def _search_starcitizen_wiki(self, query):
-        """Interroge la Galactapedia du Star Citizen Wiki (wiki
-        communautaire non officiel, pas affilié à Cloud Imperium Games —
-        voir STARCITIZEN_WIKI_API_BASE) pour donner à Gemini des
-        informations à jour sur l'univers du jeu, à privilégier sur ses
-        connaissances générales potentiellement datées. Version simple
-        (première itération) : une seule recherche Galactapedia sur la
-        question telle quelle, best-effort — reste silencieuse (chaîne
-        vide) au moindre souci (réseau, format de réponse inattendu...)
-        pour ne jamais faire échouer la question posée à Gemini à cause
-        d'un tiers externe."""
-        query = (query or "").strip()
-        if not query:
-            return ""
-        try:
-            payload = json.dumps({"query": query}).encode("utf-8")
-            req = urllib.request.Request(
-                f"{STARCITIZEN_WIKI_API_BASE}/galactapedia/search",
-                data=payload,
-                headers={"Content-Type": "application/json", "Accept": "application/json"},
-                method="POST",
-            )
-            with urllib.request.urlopen(req, timeout=4) as resp:
-                data = json.loads(resp.read().decode("utf-8"))
-            entries = data.get("data") if isinstance(data, dict) else None
-            if not isinstance(entries, list) or not entries:
-                return ""
-            lines = []
-            for entry in entries[:3]:
-                if not isinstance(entry, dict):
-                    continue
-                name = str(entry.get("name") or entry.get("title") or "").strip()
-                excerpt = str(
-                    entry.get("excerpt") or entry.get("summary")
-                    or entry.get("description") or ""
-                ).strip()
-                if name and excerpt:
-                    lines.append(f"- {name} : {excerpt}")
-                elif name:
-                    lines.append(f"- {name}")
-            if not lines:
-                return ""
-            return (
-                "\n\nInformations tirées du Star Citizen Wiki (star-citizen.wiki, wiki "
-                "communautaire non officiel) — à utiliser en priorité si pertinent pour "
-                "la question plutôt que tes propres connaissances générales, qui peuvent "
-                "être datées :\n" + "\n".join(lines)
-            )
-        except Exception as e:
-            self._log(f"[Info] Recherche Star Citizen Wiki indisponible : {e}", "info")
-            return ""
-
     def _gemini_reply_thread(self, force_voice_output=None):
         api_key = (self.gemini_api_key or "").strip()
         if not api_key:
@@ -5104,15 +5039,10 @@ class Api:
         if self._game_log_watcher:
             game_state_block = game_state_to_prompt_block(self._game_log_watcher.get_state())
 
-        last_question = ""
-        if self.gemini_history and self.gemini_history[-1].get("role") == "user":
-            last_question = self.gemini_history[-1].get("content", "")
-        wiki_block = self._search_starcitizen_wiki(last_question)
-
         system_text = ai_system_prompt(
             self.gemini_name, self.gemini_custom_context, self.user_name, self.gemini_response_length,
             lang=self.ui_language,
-        ) + game_state_block + wiki_block
+        ) + game_state_block
 
         # Gemini attend tout l'historique à chaque appel, mais son rôle
         # assistant s'appelle "model", pas "assistant".
