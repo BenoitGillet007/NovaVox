@@ -5698,11 +5698,20 @@ class Api:
         self._speak(sample, piper_voice=voice_id)
         return {"ok": True}
 
-    # Plafond de tokens générés par réponse, selon le réglage de longueur
-    # choisi par l'utilisateur, pour ne jamais couper une réponse
-    # légitime au milieu tout en évitant un gaspillage de temps de
-    # génération sur du texte superflu.
-    AI_NUM_PREDICT_BY_LENGTH = {"short": 80, "normal": 300, "long": 800}
+    # Plafond de tokens générés par réponse (maxOutputTokens), selon le
+    # réglage de longueur choisi par l'utilisateur. Ces valeurs étaient à
+    # l'origine bien plus basses (80/300/800), calibrées pour Nova/Ollama
+    # (retiré depuis) où num_predict ne limitait QUE le texte visible. Pour
+    # Gemini, maxOutputTokens plafonne le total réflexion + réponse
+    # visible (voir thinkingConfig/thinkingLevel juste en dessous) — sur
+    # une question un peu technique, la réflexion pouvait à elle seule
+    # épuiser tout le budget, ne laissant presque plus de tokens pour la
+    # réponse réelle (bug observé en usage réel : réponses tronquées en
+    # plein mot, voire incohérentes). Le quota gratuit quotidien de Gemini
+    # se compte en NOMBRE de requêtes (RPD), pas en tokens consommés (voir
+    # GEMINI_DAILY_LIMITS) : augmenter ces valeurs n'entame donc pas plus
+    # vite le quota, juste un peu plus de temps de génération par requête.
+    AI_NUM_PREDICT_BY_LENGTH = {"short": 512, "normal": 1024, "long": 2048}
 
     # Les modèles Gemini 3.x réfléchissent avant de répondre (thinkingLevel),
     # ce qui ajoute une latence significative avant même le premier mot de
