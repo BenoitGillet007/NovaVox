@@ -758,11 +758,11 @@ DEFAULT_PROFILE_NAME = "Défaut"
 # sessions.
 BACKUPS_DIR = os.path.join(BASE_DIR, "backups")
 BACKUP_KEEP_COUNT = 10
-# Archive du journal système : voir Api._save_session_log_archive, appelée
-# à la fermeture réelle de l'application (_on_closing) pour garder une
-# trace consultable après coup, même une fois le panneau "journal système"
-# de l'interface disparu avec la fenêtre. SESSION_LOG_KEEP_COUNT limite le
-# dossier pour la même raison que BACKUP_KEEP_COUNT ci-dessus.
+# Archive du journal système : voir Api._prepare_session_log_file et
+# Api._append_session_log_line, qui écrivent chaque ligne du journal au
+# fil de la session (pas juste à la fermeture, pour garder une trace même
+# après un plantage ou une fermeture brutale). SESSION_LOG_KEEP_COUNT
+# limite le dossier pour la même raison que BACKUP_KEEP_COUNT ci-dessus.
 SESSION_LOGS_DIR = os.path.join(BASE_DIR, "logs")
 SESSION_LOG_KEEP_COUNT = 20
 # Notes de mise à jour affichées quand on clique sur le numéro de version
@@ -2485,14 +2485,18 @@ class Api:
     """Pont entre l'interface web (JS) et la logique Python."""
 
     def __init__(self):
-        # Copie en mémoire de tout ce qui passe par _log() pendant la
-        # session, pour pouvoir l'archiver dans un fichier à la fermeture
-        # (voir _save_session_log_archive, appelée depuis _on_closing) —
-        # le panneau "journal système" de l'interface, lui, ne garde rien
-        # une fois l'appli fermée. Doit être initialisé en tout premier :
-        # plusieurs étapes de construction ci-dessous (ex.
-        # _start_game_log_watcher) appellent déjà self._log().
-        self._log_history = []
+        # Chemin du fichier d'archive du journal système de CETTE session
+        # (voir _append_session_log_line, appelée depuis _log) — écrit
+        # ligne par ligne au fur et à mesure plutôt que gardé en mémoire
+        # puis écrit d'un coup à la fermeture : le fichier reste à jour
+        # même si l'application se ferme brutalement (plantage, coupure de
+        # courant, tuée depuis le Gestionnaire des tâches) au lieu de
+        # perdre tout le journal d'une session qui ne se ferme jamais
+        # proprement. Doit être préparé en tout premier : plusieurs étapes
+        # de construction ci-dessous (ex. _start_game_log_watcher)
+        # appellent déjà self._log().
+        self._session_log_lock = threading.Lock()
+        self._session_log_path = self._prepare_session_log_file()
         global _active_profile_id
         migrated_pid = _ensure_profiles_migrated()
         _active_profile_id = migrated_pid or load_active_profile_id()
@@ -6148,30 +6152,24 @@ class Api:
                 pass
 
     def _log(self, msg, kind="info"):
-        self._log_history.append((datetime.datetime.now(), kind, msg))
         self._push(f"appendLog({json.dumps(msg)}, {json.dumps(kind)})")
+        self._append_session_log_line(kind, msg)
 
-    def _save_session_log_archive(self):
-        """Sauvegarde tout le journal système de la session (voir _log,
-        qui alimente self._log_history) dans un .txt horodaté du dossier
-        SESSION_LOGS_DIR — appelée à la fermeture réelle de l'application
-        (_on_closing), jamais à un simple masquage dans la barre des
-        tâches. Ne couvre que ce qui passe par _log côté Python : les
-        quelques messages ajoutés directement côté interface (ex. une
-        validation de formulaire) sans jamais transiter par Python n'y
-        figurent pas. Best-effort silencieux : ne doit jamais empêcher ou
-        ralentir la fermeture de l'application."""
-        if not self._log_history:
-            return
+    @staticmethod
+    def _prepare_session_log_file():
+        """Crée le fichier d'archive du journal système de cette session
+        (dossier SESSION_LOGS_DIR, nom horodaté) et purge les archives les
+        plus anciennes au-delà de SESSION_LOG_KEEP_COUNT (même logique que
+        BACKUP_KEEP_COUNT pour BACKUPS_DIR) — fait au LANCEMENT plutôt qu'à
+        la fermeture, pour que la purge ait lieu même après une session qui
+        ne s'est jamais fermée proprement. Renvoie None en cas d'erreur
+        (dossier inaccessible...), auquel cas _append_session_log_line ne
+        fait simplement rien pour le reste de la session."""
         try:
             os.makedirs(SESSION_LOGS_DIR, exist_ok=True)
             path = os.path.join(SESSION_LOGS_DIR, f"session_{time.strftime('%Y%m%d_%H%M%S')}.txt")
-            with open(path, "w", encoding="utf-8") as f:
-                for when, kind, msg in self._log_history:
-                    f.write(f"[{when.strftime('%H:%M:%S')}] [{kind}] {msg}\n")
+            open(path, "w", encoding="utf-8").close()
 
-            # Ne conserve que les SESSION_LOG_KEEP_COUNT archives les plus
-            # récentes (même logique que BACKUP_KEEP_COUNT pour BACKUPS_DIR).
             logs = sorted(
                 f for f in os.listdir(SESSION_LOGS_DIR)
                 if f.startswith("session_") and f.endswith(".txt")
@@ -6181,6 +6179,25 @@ class Api:
                     os.remove(os.path.join(SESSION_LOGS_DIR, old))
                 except Exception:
                     pass
+            return path
+        except Exception:
+            return None
+
+    def _append_session_log_line(self, kind, msg):
+        """Écrit IMMÉDIATEMENT chaque ligne du journal système dans
+        self._session_log_path (ouvert/écrit/refermé à chaque appel,
+        plutôt que gardé en mémoire pour toute la session — voir le
+        commentaire sur self._session_log_path dans __init__). Verrouillée
+        (self._session_log_lock) : _log peut être appelée depuis plusieurs
+        threads à la fois (ex. le thread de réponse Gemini). Best-effort
+        silencieux : ne doit jamais faire échouer l'appelant."""
+        if not self._session_log_path:
+            return
+        try:
+            line = f"[{datetime.datetime.now().strftime('%H:%M:%S')}] [{kind}] {msg}\n"
+            with self._session_log_lock:
+                with open(self._session_log_path, "a", encoding="utf-8") as f:
+                    f.write(line)
         except Exception:
             pass
 
@@ -7646,7 +7663,6 @@ def _wire_main_window_events(window, window_config, on_loaded_extra=None, api=No
         # lancement.
         if api is not None:
             api._app_closing = True
-            api._save_session_log_archive()
             if api._overlay_window is not None:
                 try:
                     api._overlay_window.destroy()
