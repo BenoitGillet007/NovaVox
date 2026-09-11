@@ -2279,6 +2279,72 @@ def _find_hwnd_by_title(title, timeout=5.0):
     return None
 
 
+# Fond flouté/teinté réellement transparent de l'overlay verrouillé (voir
+# _apply_overlay_acrylic_backdrop, appelée depuis _finalize_overlay_window) :
+# SetWindowCompositionAttribute, une API Windows non documentée
+# officiellement mais stable et très largement utilisée depuis des années
+# par de nombreuses applications connues pour obtenir cet effet ("Acrylic"
+# introduit avec Windows 10). Remplace une première tentative avec
+# SetLayeredWindowAttributes (mécanisme de composition "à l'ancienne", GDI)
+# qui s'est révélée corrompre l'affichage (fond rouge) en entrant en
+# conflit avec le rendu transparent que WebView2 gère déjà lui-même en
+# interne (DirectComposition) — SetWindowCompositionAttribute agit au
+# niveau du compositeur de bureau (DWM) plutôt qu'au niveau GDI, avec
+# l'espoir que ça cohabite mieux avec WebView2. Non testable depuis
+# l'environnement de développement (pas de Windows disponible ici).
+class _AccentPolicy(ctypes.Structure):
+    _fields_ = [
+        ("AccentState", ctypes.c_int),
+        ("AccentFlags", ctypes.c_int),
+        ("GradientColor", ctypes.c_uint32),
+        ("AnimationId", ctypes.c_int),
+    ]
+
+
+class _WindowCompositionAttribData(ctypes.Structure):
+    _fields_ = [
+        ("Attribute", ctypes.c_int),
+        ("Data", ctypes.c_void_p),
+        ("SizeOfData", ctypes.c_size_t),
+    ]
+
+
+_WCA_ACCENT_POLICY = 19
+_ACCENT_ENABLE_ACRYLICBLURBEHIND = 4
+
+
+def _apply_overlay_acrylic_backdrop(hwnd, hex_color, opacity_percent):
+    """Applique le fond flouté/teinté réellement transparent sur `hwnd` —
+    la teinte et la transparence viennent de `hex_color`/`opacity_percent`
+    (les réglages choisis par l'utilisateur, voir overlay_set_appearance),
+    pas d'une couleur fixe. Renvoie True/False selon que l'appel Windows a
+    réussi ; n'importe quelle erreur (API absente, structure rejetée...)
+    est renvoyée comme False plutôt que de faire planter l'appelant."""
+    try:
+        set_attr = ctypes.windll.user32.SetWindowCompositionAttribute
+    except (AttributeError, OSError):
+        return False
+    hex_clean = _validate_hex_color(hex_color, OVERLAY_DEFAULT_BG_COLOR).lstrip("#")
+    r, g, b = int(hex_clean[0:2], 16), int(hex_clean[2:4], 16), int(hex_clean[4:6], 16)
+    a = round(_validate_opacity_percent(opacity_percent, OVERLAY_DEFAULT_BG_OPACITY) * 255 / 100)
+    # GradientColor attend l'ordre 0xAABBGGRR (alpha, bleu, vert, rouge) —
+    # PAS l'ordre RGBA habituel.
+    gradient_color = (a << 24) | (b << 16) | (g << 8) | r
+    accent = _AccentPolicy()
+    accent.AccentState = _ACCENT_ENABLE_ACRYLICBLURBEHIND
+    accent.AccentFlags = 0
+    accent.GradientColor = gradient_color & 0xFFFFFFFF
+    accent.AnimationId = 0
+    data = _WindowCompositionAttribData()
+    data.Attribute = _WCA_ACCENT_POLICY
+    data.SizeOfData = ctypes.sizeof(accent)
+    data.Data = ctypes.cast(ctypes.pointer(accent), ctypes.c_void_p)
+    try:
+        return bool(set_attr(hwnd, ctypes.byref(data)))
+    except Exception:
+        return False
+
+
 # Force la barre de titre native (celle dessinée par Windows, PAS le
 # contenu de la page) en mode sombre plutôt que le blanc par défaut, qui
 # jurait avec le thème sombre de l'application — voir _darken_main_window
@@ -6333,7 +6399,13 @@ class Api:
         permet à l'interface d'appeler cette méthode séparément pour
         chaque curseur/sélecteur de couleur sans devoir renvoyer les 4 à
         chaque fois. Applique le changement immédiatement si l'overlay est
-        ouvert, et persiste toujours (même overlay fermé)."""
+        ouvert, et persiste toujours (même overlay fermé). Le fond et le
+        texte sont appliqués par deux mécanismes différents (voir
+        _apply_overlay_acrylic_backdrop et _push_overlay_appearance) mais
+        tous deux en direct sur la fenêtre déjà affichée, sans avoir besoin
+        de la recréer."""
+        bg_changed = bg_color is not None or bg_opacity is not None
+        text_changed = text_color is not None or text_opacity is not None
         if bg_color is not None:
             self.overlay_bg_color = _validate_hex_color(bg_color, self.overlay_bg_color)
         if bg_opacity is not None:
@@ -6343,42 +6415,20 @@ class Api:
         if text_opacity is not None:
             self.overlay_text_opacity = _validate_opacity_percent(text_opacity, self.overlay_text_opacity)
         self._persist_overlay_config(self.overlay_enabled, *self._overlay_saved_pos)
-        self._recreate_overlay_window_for_appearance()
+        if bg_changed and self._overlay_hwnd and not self.overlay_edit_mode:
+            # SetWindowCompositionAttribute (voir _apply_overlay_acrylic_backdrop)
+            # peut être rappelée à tout moment sur la même fenêtre déjà
+            # affichée pour changer sa teinte/transparence — contrairement
+            # à transparent= (paramètre pywebview), qui lui ne peut être
+            # défini qu'à la création. Rien à faire en mode "déplacer" :
+            # jamais transparent par design (voir _create_overlay_window).
+            _apply_overlay_acrylic_backdrop(self._overlay_hwnd, self.overlay_bg_color, self.overlay_bg_opacity)
+        if text_changed:
+            self._push_overlay_appearance()
         return {
             "ok": True, "bgColor": self.overlay_bg_color, "bgOpacity": self.overlay_bg_opacity,
             "textColor": self.overlay_text_color, "textOpacity": self.overlay_text_opacity,
         }
-
-    def _recreate_overlay_window_for_appearance(self):
-        """Recrée entièrement la fenêtre overlay (même mécanisme que
-        overlay_set_edit_mode) pour qu'un changement de couleur/
-        transparence soit présent dès la toute première image affichée,
-        plutôt que d'essayer de le répercuter en direct sur la fenêtre
-        déjà ouverte. Deux approches plus légères ont été essayées et
-        abandonnées : un simple changement de propriété CSS en direct
-        n'avait AUCUN effet visible (Windows ne recomposait pas la
-        transparence de la fenêtre déjà affichée avec ce changement), et
-        un contournement par redimensionnement aller-retour provoquait un
-        flash rouge / artefact visuel pendant le redimensionnement
-        lui-même — probablement un état de rendu transitoire invalide
-        côté WebView2 pendant qu'une fenêtre en couche change de taille.
-        Recréer entièrement la fenêtre reprend le même chemin déjà fiable
-        que le verrouillage/déverrouillage. Sans effet si l'overlay n'est
-        pas actuellement affiché — la nouvelle apparence s'appliquera
-        simplement à la prochaine ouverture (déjà persistée, voir
-        _persist_overlay_config)."""
-        if self._overlay_window is None:
-            return
-        editable = self.overlay_edit_mode
-        self._overlay_recreating = True
-        try:
-            self._overlay_window.destroy()
-        except Exception:
-            pass
-        self._overlay_window = None
-        self._overlay_hwnd = None
-        self._create_overlay_window(transparent=not editable, edit_mode=editable)
-        threading.Timer(0.6, lambda: setattr(self, "_overlay_recreating", False)).start()
 
     def _persist_overlay_config(self, enabled, x=None, y=None):
         """Sauvegarde l'ÉTAT COMPLET de l'overlay (position/activation,
@@ -6397,13 +6447,13 @@ class Api:
 
     def _push_overlay_appearance(self):
         """Envoie l'apparence actuelle au JS (voir overlaySetAppearance
-        côté overlay.html) — utilisée UNIQUEMENT au chargement d'une
-        fenêtre overlay qui vient d'être (re)créée (voir
-        _push_overlay_full_state), où l'apparence est correctement prise
-        en compte dès la première image. PAS utilisée pour répercuter un
-        changement en direct sur une fenêtre déjà affichée — voir
-        overlay_set_appearance et _recreate_overlay_window_for_appearance
-        pour cette raison."""
+        côté overlay.html), qui n'en tient réellement compte que pour le
+        texte (--ov-text) — le fond est ignoré côté JS et géré séparément
+        côté Windows (voir overlay_set_appearance et
+        _apply_overlay_acrylic_backdrop). Utilisée à la fois au chargement
+        d'une fenêtre overlay qui vient d'être (re)créée (voir
+        _push_overlay_full_state) et pour répercuter en direct un
+        changement de couleur de texte depuis les Réglages."""
         self._overlay_push(
             f"overlaySetAppearance({json.dumps(self.overlay_bg_color)}, {self.overlay_bg_opacity}, "
             f"{json.dumps(self.overlay_text_color)}, {self.overlay_text_opacity})"
@@ -6717,20 +6767,21 @@ class Api:
                 "error",
             )
             return
-        # Tentative abandonnée : un appel à SetLayeredWindowAttributes ici,
-        # dans l'espoir d'« activer » la composition en couche pour que le
-        # canal alpha du CSS soit respecté par Windows (voir l'historique
-        # de cette section), a en réalité CORROMPU l'affichage — fond rouge
-        # au lieu du fond attendu, uniquement en mode verrouillé (jamais en
-        # mode "déplacer", qui n'appelle pas cette fonction dans cette
-        # branche), confirmé en usage réel. Cause probable : conflit entre
-        # ce mécanisme de composition "à l'ancienne" (GDI) et celui, plus
-        # moderne, que WebView2 utilise déjà en interne (DirectComposition)
-        # pour son propre rendu transparent — les deux ne semblent pas
-        # cohabiter proprement sur cette configuration. Le fond de
-        # l'overlay reste donc, pour l'instant, mélangé avec du blanc au
-        # lieu de vraiment laisser voir le jeu en dessous (voir le
-        # réglage Réglages > NovaVox > Apparence de l'overlay).
+        if not self.overlay_edit_mode:
+            # Fenêtre verrouillée : applique le fond flouté/teinté
+            # réellement transparent (voir _apply_overlay_acrylic_backdrop)
+            # avec la couleur/transparence actuellement choisie par
+            # l'utilisateur. Une première tentative avec
+            # SetLayeredWindowAttributes (mécanisme GDI "à l'ancienne") a dû
+            # être abandonnée : elle corrompait l'affichage (fond rouge),
+            # vraisemblablement un conflit avec le rendu transparent que
+            # WebView2 gère déjà lui-même en interne (DirectComposition).
+            if not _apply_overlay_acrylic_backdrop(hwnd, self.overlay_bg_color, self.overlay_bg_opacity):
+                self._log(
+                    "[Avertissement overlay] Impossible d'appliquer la transparence réelle "
+                    "du fond — il reste opaque (mélangé avec du blanc) en attendant.",
+                    "error",
+                )
 
     def _destroy_overlay_window(self):
         if self._overlay_window is not None:
