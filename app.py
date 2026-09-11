@@ -6346,11 +6346,42 @@ class Api:
         if text_opacity is not None:
             self.overlay_text_opacity = _validate_opacity_percent(text_opacity, self.overlay_text_opacity)
         self._persist_overlay_config(self.overlay_enabled, *self._overlay_saved_pos)
-        self._push_overlay_appearance()
+        self._recreate_overlay_window_for_appearance()
         return {
             "ok": True, "bgColor": self.overlay_bg_color, "bgOpacity": self.overlay_bg_opacity,
             "textColor": self.overlay_text_color, "textOpacity": self.overlay_text_opacity,
         }
+
+    def _recreate_overlay_window_for_appearance(self):
+        """Recrée entièrement la fenêtre overlay (même mécanisme que
+        overlay_set_edit_mode) pour qu'un changement de couleur/
+        transparence soit présent dès la toute première image affichée,
+        plutôt que d'essayer de le répercuter en direct sur la fenêtre
+        déjà ouverte. Deux approches plus légères ont été essayées et
+        abandonnées : un simple changement de propriété CSS en direct
+        n'avait AUCUN effet visible (Windows ne recomposait pas la
+        transparence de la fenêtre déjà affichée avec ce changement), et
+        un contournement par redimensionnement aller-retour provoquait un
+        flash rouge / artefact visuel pendant le redimensionnement
+        lui-même — probablement un état de rendu transitoire invalide
+        côté WebView2 pendant qu'une fenêtre en couche change de taille.
+        Recréer entièrement la fenêtre reprend le même chemin déjà fiable
+        que le verrouillage/déverrouillage. Sans effet si l'overlay n'est
+        pas actuellement affiché — la nouvelle apparence s'appliquera
+        simplement à la prochaine ouverture (déjà persistée, voir
+        _persist_overlay_config)."""
+        if self._overlay_window is None:
+            return
+        editable = self.overlay_edit_mode
+        self._overlay_recreating = True
+        try:
+            self._overlay_window.destroy()
+        except Exception:
+            pass
+        self._overlay_window = None
+        self._overlay_hwnd = None
+        self._create_overlay_window(transparent=not editable, edit_mode=editable)
+        threading.Timer(0.6, lambda: setattr(self, "_overlay_recreating", False)).start()
 
     def _persist_overlay_config(self, enabled, x=None, y=None):
         """Sauvegarde l'ÉTAT COMPLET de l'overlay (position/activation,
@@ -6368,34 +6399,18 @@ class Api:
         )
 
     def _push_overlay_appearance(self):
+        """Envoie l'apparence actuelle au JS (voir overlaySetAppearance
+        côté overlay.html) — utilisée UNIQUEMENT au chargement d'une
+        fenêtre overlay qui vient d'être (re)créée (voir
+        _push_overlay_full_state), où l'apparence est correctement prise
+        en compte dès la première image. PAS utilisée pour répercuter un
+        changement en direct sur une fenêtre déjà affichée — voir
+        overlay_set_appearance et _recreate_overlay_window_for_appearance
+        pour cette raison."""
         self._overlay_push(
             f"overlaySetAppearance({json.dumps(self.overlay_bg_color)}, {self.overlay_bg_opacity}, "
             f"{json.dumps(self.overlay_text_color)}, {self.overlay_text_opacity})"
         )
-        self._nudge_overlay_repaint()
-
-    def _nudge_overlay_repaint(self):
-        """Force Windows (DWM) à recomposer réellement la fenêtre overlay
-        avec ce qu'il y a derrière après un changement d'apparence.
-        Constaté en usage réel : un simple changement de propriété CSS via
-        JavaScript sur une fenêtre déjà affichée et en couche (voir
-        _finalize_overlay_window) ne suffit pas toujours à déclencher
-        cette recomposition — contrairement à un changement plus "lourd"
-        comme une classe togglée (ex. #panel.mic-cut), qui lui se
-        répercute bien. Un minuscule redimensionnement aller-retour
-        (1px, invisible à l'œil) force Windows à rafraîchir la surface
-        composée. Best-effort : ne fait rien si l'overlay n'est pas
-        affiché, ignore toute erreur plutôt que de faire échouer
-        l'appelant."""
-        if not self._overlay_window or not self.overlay_enabled:
-            return
-        try:
-            w, h = self._overlay_window.width, self._overlay_window.height
-            self._overlay_window.resize(w, h + 1)
-            time.sleep(0.03)  # laisse Windows traiter le 1er redimensionnement avant de revenir
-            self._overlay_window.resize(w, h)
-        except Exception:
-            pass
 
     def overlay_set_row_visible(self, row_key, visible):
         """Appelé depuis la case à cocher d'une ligne de l'overlay (visible
