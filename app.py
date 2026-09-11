@@ -5002,11 +5002,13 @@ class Api:
         la moindre erreur réseau/timeout, renvoie une chaîne vide sans
         jamais empêcher la réponse normale."""
         if quota_used + 2 > quota_limit:
+            logging.info("Wiki SC : recherche sautée (quota gratuit du jour presque épuisé)")
             return ""
         try:
             term = self._wiki_extract_entity_en(question, api_key)
             self._gemini_record_request()
             if not term:
+                logging.info("Wiki SC : aucune entité précise identifiée dans la question")
                 return ""
             title = self._wiki_search_page_title(term)
             if not title:
