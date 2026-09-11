@@ -246,22 +246,20 @@ echo Mise a jour automatique de version.json...
 echo { "version": "%APPVER%", "url": "https://novanox.1ercorpscolonial.fr/NovaVox_Setup.exe" }> version.json
 echo   -^> version.json mis a jour avec la version %APPVER%.
 
-REM Notes de version : extrait uniquement le bloc de la version courante depuis patch_maj.txt, plutot que tout l'historique complet. Partage entre la publication GitHub et la notification Discord ci-dessous.
+REM Notes de version : extrait uniquement le bloc de la version courante depuis
+REM patch_maj.txt, plutot que tout l'historique complet. Partage entre la
+REM publication GitHub et la notification Discord ci-dessous. Delegue a
+REM PowerShell (extract_release_notes.ps1) plutot qu'une boucle batch native
+REM : le changelog utilise ">" comme separateur visuel de chemin de menu
+REM (ex. "Reglages > NovaVox"), et une boucle "for /f" avec expansion
+REM retardee (!LINE!) directement collee a une redirection re-interprete
+REM CE ">" comme une VRAIE redirection a l'execution -- ca creait des
+REM fichiers parasites (nommes d'apres le mot suivant le ">", parfois
+REM deforme par le code page de la console) a la racine du projet a
+REM chaque build (vu en usage reel : fichiers "NovaVox", "Alias"...).
 set "NOTES_FILE=%TEMP%\novavox_release_notes.txt"
 if exist "%NOTES_FILE%" del /q "%NOTES_FILE%"
-set CAPTURING=0
-for /f "usebackq delims=" %%L in ("patch_maj.txt") do (
-    set "LINE=%%L"
-    echo(!LINE!| findstr /r "^v[0-9]" >nul
-    if not errorlevel 1 (
-        if "!CAPTURING!"=="0" (set CAPTURING=1) else (set CAPTURING=2)
-    ) else (
-        if "!CAPTURING!"=="1" (
-            echo(!LINE!| findstr /r "^------*$" >nul
-            if errorlevel 1 echo(!LINE!>>"%NOTES_FILE%"
-        )
-    )
-)
+powershell -NoProfile -ExecutionPolicy Bypass -File "extract_release_notes.ps1" -PatchFile "patch_maj.txt" -NotesFile "%NOTES_FILE%"
 if not exist "%NOTES_FILE%" echo Voir patch_maj.txt pour le detail.> "%NOTES_FILE%"
 
 echo.
