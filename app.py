@@ -5020,7 +5020,7 @@ class Api:
                 return ""
             extract = self._wiki_fetch_page_text(title)
             if not extract:
-                self._log(f"[Info] Wiki SC : page « {title} » trouvée mais vide une fois extraite.", "info")
+                self._log(f"[Info] Wiki SC : page « {title} » sans contenu exploitable (vide ou désambiguïsation).", "info")
                 return ""
         except Exception as e:
             self._log(f"[Info] Wiki SC : recherche de contexte ignorée ({e}).", "info")
@@ -5060,8 +5060,13 @@ class Api:
             "Reply with ONLY the English name of the one specific Star Citizen "
             "game entity (ship, ground vehicle, weapon, item, location, star "
             "system, organization...) the LAST question is about, suitable as "
-            "a wiki search term. If it is not about one specific named entity, "
-            "reply with exactly: NONE"
+            "a wiki search term — and matching the exact wiki page title. Some "
+            "names are ambiguous on this wiki (e.g. a planet sharing its name "
+            "with the manufacturer that operates it, like MicroTech): when that "
+            "is the case, disambiguate using the wiki's own convention, a short "
+            "type in parentheses after the name (e.g. \"MicroTech (planet)\"), "
+            "based on what the question is actually asking about. If it is not "
+            "about one specific named entity, reply with exactly: NONE"
         )
         payload = json.dumps({
             "contents": [{"role": "user", "parts": [{"text": prompt}]}],
@@ -5112,10 +5117,16 @@ class Api:
         """Récupère le HTML rendu de la page (action=parse) et le
         convertit en texte simple, tronqué à
         STARCITIZEN_WIKI_EXTRACT_MAX_CHARS pour ne pas peser sur le budget
-        de tokens de la réponse Gemini (voir AI_NUM_PREDICT_BY_LENGTH)."""
+        de tokens de la réponse Gemini (voir AI_NUM_PREDICT_BY_LENGTH).
+        Renvoie None pour une page de désambiguïsation (juste une liste de
+        liens vers les pages réelles, ex. « MicroTech » pointant vers
+        « MicroTech (planet) »/« MicroTech (manufacturer) ») plutôt que de
+        donner à Gemini un extrait sans contenu exploitable — détectée via
+        sa catégorie, indépendamment du fait que l'entité ait déjà été
+        désambiguïsée en amont (voir _wiki_extract_entity_en) ou non."""
         params = urllib.parse.urlencode({
             "action": "parse", "page": title, "format": "json",
-            "prop": "text", "redirects": 1,
+            "prop": "text|categories", "redirects": 1,
         })
         req = urllib.request.Request(
             f"{STARCITIZEN_WIKI_API_URL}?{params}",
@@ -5123,7 +5134,11 @@ class Api:
         )
         with urllib.request.urlopen(req, timeout=8) as resp:
             data = json.loads(resp.read().decode("utf-8"))
-        raw_html = data.get("parse", {}).get("text", {}).get("*", "")
+        parse = data.get("parse", {})
+        categories = parse.get("categories") or []
+        if any("disambig" in (c.get("*") or "").lower() for c in categories):
+            return None
+        raw_html = parse.get("text", {}).get("*", "")
         if not raw_html:
             return None
         return cls._wiki_html_to_text(raw_html)[:STARCITIZEN_WIKI_EXTRACT_MAX_CHARS]
