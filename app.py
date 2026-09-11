@@ -2529,6 +2529,7 @@ def _patch_pywebview_transparency():
     try:
         from webview.platforms import winforms as _pywebview_winforms
         from System.Drawing import Color as _NetColor
+        import System.Windows.Forms as _NetWinForms
 
         # BrowserForm est imbriquée dans BrowserView (pas un attribut direct
         # du module) — vérifié en usage réel : une première version de ce
@@ -2549,6 +2550,20 @@ def _patch_pywebview_transparency():
                 self.TransparencyKey = _NetColor.Empty  # neutralise l'éventuelle clé de couleur posée ci-dessus
                 self.AllowTransparency = True
                 self.BackColor = _NetColor.FromArgb(0, 0, 0, 0)
+                # Constaté en usage réel (aucune exception levée ci-dessus,
+                # donc AllowTransparency accepté par .NET, mais AUCUN effet
+                # visuel) : WinForms ne prend réellement en compte
+                # AllowTransparency que s'il est posé AVANT la création du
+                # handle natif Windows de la fenêtre — or celui-ci est très
+                # probablement déjà créé à ce stade, l'__init__ d'origine
+                # ayant eu l'occasion d'y accéder plus haut (ex. via
+                # self.Handle pour d'autres réglages). Changer
+                # FormBorderStyle force WinForms à recréer ce handle — une
+                # technique connue pour ce problème précis — pour que ce
+                # réglage soit enfin réellement appliqué.
+                current_style = self.FormBorderStyle
+                self.FormBorderStyle = _NetWinForms.FormBorderStyle.FixedSingle
+                self.FormBorderStyle = current_style
             except Exception as e:
                 error_logger.error(f"Correctif de transparence pywebview inefficace sur cette fenêtre : {e}")
 
