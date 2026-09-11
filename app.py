@@ -758,6 +758,13 @@ DEFAULT_PROFILE_NAME = "Défaut"
 # sessions.
 BACKUPS_DIR = os.path.join(BASE_DIR, "backups")
 BACKUP_KEEP_COUNT = 10
+# Archive du journal système : voir Api._save_session_log_archive, appelée
+# à la fermeture réelle de l'application (_on_closing) pour garder une
+# trace consultable après coup, même une fois le panneau "journal système"
+# de l'interface disparu avec la fenêtre. SESSION_LOG_KEEP_COUNT limite le
+# dossier pour la même raison que BACKUP_KEEP_COUNT ci-dessus.
+SESSION_LOGS_DIR = os.path.join(BASE_DIR, "logs")
+SESSION_LOG_KEEP_COUNT = 20
 # Notes de mise à jour affichées quand on clique sur le numéro de version
 # dans le pied de page (voir Api.get_patch_notes et versionBtn côté
 # script.js). Fichier texte libre, à la racine du projet (à côté de
@@ -2763,6 +2770,12 @@ class Api:
         # activé effaçait la préférence et l'overlay ne revenait plus au
         # lancement suivant.
         self._app_closing = False
+        # Copie en mémoire de tout ce qui passe par _log() (voir plus bas)
+        # pendant la session, pour pouvoir l'archiver dans un fichier au
+        # moment de fermer l'application (voir save_session_log_archive,
+        # appelée depuis _on_closing) — le panneau "journal système" de
+        # l'interface, lui, ne garde rien une fois l'appli fermée.
+        self._log_history = []
         self._overlay_saved_enabled = overlay_config.get("enabled", False)
         self._overlay_saved_pos = (overlay_config.get("x"), overlay_config.get("y"))
         # Lignes de l'overlay cochées/décochées par l'utilisateur en mode
@@ -6133,7 +6146,41 @@ class Api:
                 pass
 
     def _log(self, msg, kind="info"):
+        self._log_history.append((datetime.datetime.now(), kind, msg))
         self._push(f"appendLog({json.dumps(msg)}, {json.dumps(kind)})")
+
+    def _save_session_log_archive(self):
+        """Sauvegarde tout le journal système de la session (voir _log,
+        qui alimente self._log_history) dans un .txt horodaté du dossier
+        SESSION_LOGS_DIR — appelée à la fermeture réelle de l'application
+        (_on_closing), jamais à un simple masquage dans la barre des
+        tâches. Ne couvre que ce qui passe par _log côté Python : les
+        quelques messages ajoutés directement côté interface (ex. une
+        validation de formulaire) sans jamais transiter par Python n'y
+        figurent pas. Best-effort silencieux : ne doit jamais empêcher ou
+        ralentir la fermeture de l'application."""
+        if not self._log_history:
+            return
+        try:
+            os.makedirs(SESSION_LOGS_DIR, exist_ok=True)
+            path = os.path.join(SESSION_LOGS_DIR, f"session_{time.strftime('%Y%m%d_%H%M%S')}.txt")
+            with open(path, "w", encoding="utf-8") as f:
+                for when, kind, msg in self._log_history:
+                    f.write(f"[{when.strftime('%H:%M:%S')}] [{kind}] {msg}\n")
+
+            # Ne conserve que les SESSION_LOG_KEEP_COUNT archives les plus
+            # récentes (même logique que BACKUP_KEEP_COUNT pour BACKUPS_DIR).
+            logs = sorted(
+                f for f in os.listdir(SESSION_LOGS_DIR)
+                if f.startswith("session_") and f.endswith(".txt")
+            )
+            for old in logs[:-SESSION_LOG_KEEP_COUNT]:
+                try:
+                    os.remove(os.path.join(SESSION_LOGS_DIR, old))
+                except Exception:
+                    pass
+        except Exception:
+            pass
 
     def log_error(self, msg):
         """Point d'entrée appelé depuis le JavaScript (voir appendLog dans
@@ -7597,6 +7644,7 @@ def _wire_main_window_events(window, window_config, on_loaded_extra=None, api=No
         # lancement.
         if api is not None:
             api._app_closing = True
+            api._save_session_log_archive()
             if api._overlay_window is not None:
                 try:
                     api._overlay_window.destroy()
