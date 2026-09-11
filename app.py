@@ -5025,12 +5025,29 @@ class Api:
             req = urllib.request.Request(
                 "https://api.star-citizen.wiki/api/galactapedia/search",
                 data=payload,
-                headers={"Content-Type": "application/json", "Accept": "application/json"},
+                headers={
+                    "Content-Type": "application/json",
+                    "Accept": "application/json",
+                    # Premier essai sans en-tête dédié rejeté par une 403
+                    # Forbidden — probablement le User-Agent générique
+                    # "Python-urllib/3.x" par défaut, souvent bloqué par
+                    # les protections anti-bot (Cloudflare...) même pour
+                    # une API publique sans authentification.
+                    "User-Agent": "NovaVox/1.0 (+https://github.com/ammoniak07/NovaVox)",
+                },
                 method="POST",
             )
             with urllib.request.urlopen(req, timeout=6) as resp:
                 raw = resp.read().decode("utf-8", errors="replace")
             self._log(f"[Diagnostic Wiki] Réponse pour « {query} » : {raw[:1500]}", "info")
+        except urllib.error.HTTPError as e:
+            try:
+                body = e.read().decode("utf-8", errors="replace")[:500]
+            except Exception:
+                body = "(corps de réponse illisible)"
+            self._log(
+                f"[Diagnostic Wiki] Échec HTTP {e.code} pour « {query} » : {body}", "info"
+            )
         except Exception as e:
             self._log(f"[Diagnostic Wiki] Échec de la requête pour « {query} » : {e}", "info")
 
