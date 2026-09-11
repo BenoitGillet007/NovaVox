@@ -2279,68 +2279,40 @@ def _find_hwnd_by_title(title, timeout=5.0):
     return None
 
 
-# Fond flouté/teinté réellement transparent de l'overlay verrouillé (voir
-# _apply_overlay_acrylic_backdrop, appelée depuis _finalize_overlay_window) :
-# SetWindowCompositionAttribute, une API Windows non documentée
-# officiellement mais stable et très largement utilisée depuis des années
-# par de nombreuses applications connues pour obtenir cet effet ("Acrylic"
-# introduit avec Windows 10). Remplace une première tentative avec
-# SetLayeredWindowAttributes (mécanisme de composition "à l'ancienne", GDI)
-# qui s'est révélée corrompre l'affichage (fond rouge) en entrant en
-# conflit avec le rendu transparent que WebView2 gère déjà lui-même en
-# interne (DirectComposition) — SetWindowCompositionAttribute agit au
-# niveau du compositeur de bureau (DWM) plutôt qu'au niveau GDI, avec
-# l'espoir que ça cohabite mieux avec WebView2. Non testable depuis
-# l'environnement de développement (pas de Windows disponible ici).
-class _AccentPolicy(ctypes.Structure):
-    _fields_ = [
-        ("AccentState", ctypes.c_int),
-        ("AccentFlags", ctypes.c_int),
-        ("GradientColor", ctypes.c_uint32),
-        ("AnimationId", ctypes.c_int),
-    ]
+# Fond flouté réellement transparent de l'overlay verrouillé (voir
+# _apply_overlay_system_backdrop, appelée depuis _finalize_overlay_window) :
+# DWMWA_SYSTEMBACKDROP_TYPE, un attribut DWM OFFICIELLEMENT documenté par
+# Microsoft (contrairement aux deux tentatives précédentes) depuis Windows
+# 11 22H2 (build 22621) pour demander le matériau "Acrylic". Confirmé en
+# usage réel : les deux tentatives précédentes ont échoué sur Windows 11 —
+# SetLayeredWindowAttributes (mécanisme GDI "à l'ancienne") corrompait
+# l'affichage (fond rouge), et SetWindowCompositionAttribute (l'ancienne
+# API non documentée, ACCENT_ENABLE_ACRYLICBLURBEHIND) n'avait AUCUN effet
+# malgré les Effets de transparence bien activés dans les réglages Windows
+# — cohérent avec le fait que Microsoft a progressivement rendu cette
+# ancienne API inopérante sur Windows 11 au profit de celle-ci.
+#
+# Contrairement à l'ancienne API, celle-ci ne prend PAS de couleur de
+# teinte personnalisée en paramètre — seulement le choix du matériau
+# (flou). La teinte/transparence réellement choisie par l'utilisateur
+# reste donc gérée en CSS (--ov-bg dans overlay.html), appliquée PAR-
+# DESSUS ce flou natif.
+_DWMWA_SYSTEMBACKDROP_TYPE = 38
+_DWMSBT_TRANSIENTWINDOW = 3  # Matériau "Acrylic"
 
 
-class _WindowCompositionAttribData(ctypes.Structure):
-    _fields_ = [
-        ("Attribute", ctypes.c_int),
-        ("Data", ctypes.c_void_p),
-        ("SizeOfData", ctypes.c_size_t),
-    ]
-
-
-_WCA_ACCENT_POLICY = 19
-_ACCENT_ENABLE_ACRYLICBLURBEHIND = 4
-
-
-def _apply_overlay_acrylic_backdrop(hwnd, hex_color, opacity_percent):
-    """Applique le fond flouté/teinté réellement transparent sur `hwnd` —
-    la teinte et la transparence viennent de `hex_color`/`opacity_percent`
-    (les réglages choisis par l'utilisateur, voir overlay_set_appearance),
-    pas d'une couleur fixe. Renvoie True/False selon que l'appel Windows a
-    réussi ; n'importe quelle erreur (API absente, structure rejetée...)
-    est renvoyée comme False plutôt que de faire planter l'appelant."""
+def _apply_overlay_system_backdrop(hwnd):
+    """Active le matériau de fond flouté natif sur `hwnd`. Renvoie True/
+    False selon que l'appel Windows a réussi (échoue proprement — sans
+    exception — sur une version de Windows antérieure à la 22H2, qui ne
+    connaît pas cet attribut) ; n'importe quelle erreur est renvoyée
+    comme False plutôt que de faire planter l'appelant."""
     try:
-        set_attr = ctypes.windll.user32.SetWindowCompositionAttribute
-    except (AttributeError, OSError):
-        return False
-    hex_clean = _validate_hex_color(hex_color, OVERLAY_DEFAULT_BG_COLOR).lstrip("#")
-    r, g, b = int(hex_clean[0:2], 16), int(hex_clean[2:4], 16), int(hex_clean[4:6], 16)
-    a = round(_validate_opacity_percent(opacity_percent, OVERLAY_DEFAULT_BG_OPACITY) * 255 / 100)
-    # GradientColor attend l'ordre 0xAABBGGRR (alpha, bleu, vert, rouge) —
-    # PAS l'ordre RGBA habituel.
-    gradient_color = (a << 24) | (b << 16) | (g << 8) | r
-    accent = _AccentPolicy()
-    accent.AccentState = _ACCENT_ENABLE_ACRYLICBLURBEHIND
-    accent.AccentFlags = 0
-    accent.GradientColor = gradient_color & 0xFFFFFFFF
-    accent.AnimationId = 0
-    data = _WindowCompositionAttribData()
-    data.Attribute = _WCA_ACCENT_POLICY
-    data.SizeOfData = ctypes.sizeof(accent)
-    data.Data = ctypes.cast(ctypes.pointer(accent), ctypes.c_void_p)
-    try:
-        return bool(set_attr(hwnd, ctypes.byref(data)))
+        backdrop_type = ctypes.c_int(_DWMSBT_TRANSIENTWINDOW)
+        hr = ctypes.windll.dwmapi.DwmSetWindowAttribute(
+            hwnd, _DWMWA_SYSTEMBACKDROP_TYPE, ctypes.byref(backdrop_type), ctypes.sizeof(backdrop_type)
+        )
+        return hr == 0
     except Exception:
         return False
 
@@ -6398,14 +6370,12 @@ class Api:
         haut). Chaque paramètre omis (None) garde sa valeur actuelle —
         permet à l'interface d'appeler cette méthode séparément pour
         chaque curseur/sélecteur de couleur sans devoir renvoyer les 4 à
-        chaque fois. Applique le changement immédiatement si l'overlay est
-        ouvert, et persiste toujours (même overlay fermé). Le fond et le
-        texte sont appliqués par deux mécanismes différents (voir
-        _apply_overlay_acrylic_backdrop et _push_overlay_appearance) mais
-        tous deux en direct sur la fenêtre déjà affichée, sans avoir besoin
-        de la recréer."""
-        bg_changed = bg_color is not None or bg_opacity is not None
-        text_changed = text_color is not None or text_opacity is not None
+        chaque fois. Le fond ET le texte sont tous deux gérés en CSS (voir
+        --ov-bg/--ov-text dans overlay.html) — seul le FLOU du fond (pas
+        sa teinte) vient d'un matériau natif Windows, activé une seule
+        fois à l'ouverture de l'overlay (voir _apply_overlay_system_backdrop),
+        pas ici. Applique le changement immédiatement si l'overlay est
+        ouvert, et persiste toujours (même overlay fermé)."""
         if bg_color is not None:
             self.overlay_bg_color = _validate_hex_color(bg_color, self.overlay_bg_color)
         if bg_opacity is not None:
@@ -6415,16 +6385,7 @@ class Api:
         if text_opacity is not None:
             self.overlay_text_opacity = _validate_opacity_percent(text_opacity, self.overlay_text_opacity)
         self._persist_overlay_config(self.overlay_enabled, *self._overlay_saved_pos)
-        if bg_changed and self._overlay_hwnd and not self.overlay_edit_mode:
-            # SetWindowCompositionAttribute (voir _apply_overlay_acrylic_backdrop)
-            # peut être rappelée à tout moment sur la même fenêtre déjà
-            # affichée pour changer sa teinte/transparence — contrairement
-            # à transparent= (paramètre pywebview), qui lui ne peut être
-            # défini qu'à la création. Rien à faire en mode "déplacer" :
-            # jamais transparent par design (voir _create_overlay_window).
-            _apply_overlay_acrylic_backdrop(self._overlay_hwnd, self.overlay_bg_color, self.overlay_bg_opacity)
-        if text_changed:
-            self._push_overlay_appearance()
+        self._push_overlay_appearance()
         return {
             "ok": True, "bgColor": self.overlay_bg_color, "bgOpacity": self.overlay_bg_opacity,
             "textColor": self.overlay_text_color, "textOpacity": self.overlay_text_opacity,
@@ -6446,14 +6407,14 @@ class Api:
         )
 
     def _push_overlay_appearance(self):
-        """Envoie l'apparence actuelle au JS (voir overlaySetAppearance
-        côté overlay.html), qui n'en tient réellement compte que pour le
-        texte (--ov-text) — le fond est ignoré côté JS et géré séparément
-        côté Windows (voir overlay_set_appearance et
-        _apply_overlay_acrylic_backdrop). Utilisée à la fois au chargement
-        d'une fenêtre overlay qui vient d'être (re)créée (voir
-        _push_overlay_full_state) et pour répercuter en direct un
-        changement de couleur de texte depuis les Réglages."""
+        """Envoie l'apparence actuelle (fond ET texte) au JS (voir
+        overlaySetAppearance côté overlay.html, qui met à jour --ov-bg et
+        --ov-text) — utilisée à la fois au chargement d'une fenêtre
+        overlay qui vient d'être (re)créée (voir _push_overlay_full_state)
+        et pour répercuter en direct un changement depuis les Réglages
+        (voir overlay_set_appearance). Le flou natif du fond, lui, est
+        activé séparément et une seule fois à l'ouverture de la fenêtre
+        (voir _apply_overlay_system_backdrop) — pas ici."""
         self._overlay_push(
             f"overlaySetAppearance({json.dumps(self.overlay_bg_color)}, {self.overlay_bg_opacity}, "
             f"{json.dumps(self.overlay_text_color)}, {self.overlay_text_opacity})"
@@ -6768,18 +6729,19 @@ class Api:
             )
             return
         if not self.overlay_edit_mode:
-            # Fenêtre verrouillée : applique le fond flouté/teinté
-            # réellement transparent (voir _apply_overlay_acrylic_backdrop)
-            # avec la couleur/transparence actuellement choisie par
-            # l'utilisateur. Une première tentative avec
-            # SetLayeredWindowAttributes (mécanisme GDI "à l'ancienne") a dû
-            # être abandonnée : elle corrompait l'affichage (fond rouge),
-            # vraisemblablement un conflit avec le rendu transparent que
-            # WebView2 gère déjà lui-même en interne (DirectComposition).
-            if not _apply_overlay_acrylic_backdrop(hwnd, self.overlay_bg_color, self.overlay_bg_opacity):
+            # Fenêtre verrouillée : active le matériau de fond flouté
+            # natif Windows 11 (voir _apply_overlay_system_backdrop) — la
+            # teinte/transparence réellement choisie par l'utilisateur
+            # vient du CSS (--ov-bg), appliqué par-dessus ce flou. Échoue
+            # proprement (sans exception) sur une version de Windows qui
+            # ne connaît pas cet attribut (avant la 22H2) : dans ce cas,
+            # le fond reste mélangé avec du blanc comme avant toute cette
+            # série de tentatives, sans corrompre l'affichage.
+            if not _apply_overlay_system_backdrop(hwnd):
                 self._log(
                     "[Avertissement overlay] Impossible d'appliquer la transparence réelle "
-                    "du fond — il reste opaque (mélangé avec du blanc) en attendant.",
+                    "du fond (nécessite Windows 11 22H2 ou plus récent) — il reste opaque "
+                    "(mélangé avec du blanc) en attendant.",
                     "error",
                 )
 

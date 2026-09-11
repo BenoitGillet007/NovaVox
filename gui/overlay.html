@@ -27,22 +27,25 @@
   }
 
   #panel {
-    /* --ov-text : couleur/transparence de texte personnalisable (voir
-       Réglages > Overlay > Apparence de l'overlay), appliquée via
-       overlaySetAppearance ci-dessous — la couleur/transparence du FOND,
-       elle, n'est plus gérée ici en CSS mais côté Windows (voir
-       _apply_overlay_acrylic_backdrop dans app.py) pour obtenir une
-       vraie transparence qui laisse voir le jeu, pas juste un mélange
-       avec le blanc. "transparent" laisse donc ce fond réellement
-       transparent voir à travers (mode verrouillé) ou apparaître la
-       couleur de secours de la fenêtre (mode "déplacer", jamais
-       transparent — voir background_color dans _create_overlay_window). */
+    /* --ov-bg/--ov-text : couleur/transparence personnalisables (voir
+       Réglages > NovaVox > Apparence de l'overlay), appliquées via
+       overlaySetAppearance ci-dessous — ces valeurs par défaut ne servent
+       qu'avant le tout premier appel (ou si l'API pywebview n'est pas
+       encore prête) pour que le panneau ait déjà l'air correct dès le
+       premier rendu. --ov-bg ne laisse voir le jeu à travers que si un
+       matériau de fond flouté natif a pu être activé sur la fenêtre (voir
+       _apply_overlay_system_backdrop dans app.py, mode verrouillé
+       uniquement) — sinon ce même --ov-bg reste visible mais mélangé
+       avec le fond de secours de la fenêtre (blanc en mode verrouillé
+       sans matériau actif, ou background_color choisi en mode
+       "déplacer", jamais transparent par design). */
+    --ov-bg: rgba(10, 14, 20, 0.72);
     --ov-text: rgba(219, 228, 238, 1);
     position: relative; /* nécessaire pour positionner #panel::after (flash de commande) */
     width: 100%;
     height: 100%;
     box-sizing: border-box;
-    background: transparent;
+    background: var(--ov-bg);
     border: 1px solid rgba(45, 212, 255, 0.35);
     border-radius: 10px;
     padding: 10px 12px;
@@ -274,14 +277,15 @@
     // Couleur/transparence du texte "neutre" de l'overlay (voir
     // Api.overlay_set_appearance côté app.py pour la portée exacte — pas
     // les couleurs de statut vert/jaune/rouge/gris, qui restent fixes).
-    // bgColor/bgOpacityPercent sont reçus mais volontairement ignorés ici
-    // — la couleur/transparence du FOND est gérée côté Windows (voir
-    // _apply_overlay_acrylic_backdrop dans app.py), pas en CSS, pour
-    // obtenir une vraie transparence. Appelée au chargement (état déjà
-    // enregistré) et à chaque changement depuis les Réglages.
+    // Le flou natif qui laisse vraiment voir le jeu à travers --ov-bg,
+    // lui, est activé séparément côté Windows (voir
+    // _apply_overlay_system_backdrop dans app.py) — pas ici. Appelée au
+    // chargement (état déjà enregistré) et à chaque changement depuis les
+    // Réglages.
     function overlaySetAppearance(bgColor, bgOpacityPercent, textColor, textOpacityPercent) {
       const panel = document.getElementById("panel");
       if (!panel) return;
+      panel.style.setProperty("--ov-bg", hexToRgba(bgColor, bgOpacityPercent));
       panel.style.setProperty("--ov-text", hexToRgba(textColor, textOpacityPercent));
     }
 
