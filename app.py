@@ -2246,6 +2246,9 @@ def save_overlay_config(enabled, x=None, y=None, visible_rows=None,
 _GWL_EXSTYLE = -20
 _WS_EX_LAYERED = 0x00080000
 _WS_EX_TRANSPARENT = 0x00000020
+# Utilisé par _finalize_overlay_window pour "activer" réellement la
+# composition en couche (voir son commentaire) via SetLayeredWindowAttributes.
+_LWA_ALPHA = 0x2
 
 
 def _user32_get_window_long(hwnd):
@@ -6677,6 +6680,36 @@ class Api:
                 "désactiver/réactiver l'overlay).",
                 "error",
             )
+            return
+        if not self.overlay_edit_mode:
+            # Fenêtre verrouillée (transparent=True à la création, voir
+            # _create_overlay_window) : pywebview configure déjà WS_EX_LAYERED
+            # sur cette fenêtre ET indique à WebView2 de rendre avec un fond
+            # réellement transparent (DefaultBackgroundColor=Transparent côté
+            # pywebview) — mais DWM (le compositeur de bureau Windows) ne
+            # compose réellement une fenêtre en couche/transparente avec ce
+            # qu'il y a derrière qu'après AU MOINS un appel explicite à
+            # SetLayeredWindowAttributes ou UpdateLayeredWindow ; sans ça, une
+            # fenêtre WS_EX_LAYERED "inactivée" reste traitée comme opaque —
+            # ce qui expliquerait que le fond de l'overlay se soit toujours
+            # mélangé avec du blanc au lieu de vraiment laisser voir le jeu.
+            # alpha=255 ici, PAS une valeur intermédiaire : on n'impose pas de
+            # transparence globale uniforme (le texte deviendrait tout aussi
+            # transparent que le fond) — la transparence réelle du fond vient
+            # déjà du canal alpha du CSS (voir overlaySetAppearance), cet
+            # appel sert uniquement à "activer" la composition en couche pour
+            # que ce canal alpha soit effectivement respecté par Windows.
+            try:
+                ok = ctypes.windll.user32.SetLayeredWindowAttributes(hwnd, 0, 255, _LWA_ALPHA)
+                if not ok:
+                    self._log(
+                        "[Avertissement overlay] Impossible d'activer la composition en "
+                        "couche (SetLayeredWindowAttributes) — la transparence du fond "
+                        "risque de ne pas s'afficher correctement.",
+                        "error",
+                    )
+            except Exception as e:
+                self._log_error("Activation de la transparence réelle de l'overlay", e)
 
     def _destroy_overlay_window(self):
         if self._overlay_window is not None:
