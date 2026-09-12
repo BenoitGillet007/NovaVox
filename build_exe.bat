@@ -203,7 +203,20 @@ if exist "commands.json" (
 )
 if exist "ai_config.json" (
     copy /y "ai_config.json" "dist\NOVAVOX\ai_config.json" >nul
-    echo   -^> ai_config.json copie.
+    REM SECURITE : ai_config.json contient ta cle API Gemini personnelle
+    REM (gemini_api_key), enregistree localement quand tu testes l'appli.
+    REM On la retire systematiquement de la copie livree dans dist, sinon
+    REM chaque utilisateur qui installe le build demarre avec TA cle deja
+    REM en place (et peut la retrouver en clair dans ses propres fichiers).
+    REM Les autres reglages (langue, voix, contexte IA, etc.) sont conserves.
+    %PY% -c "import json,sys; p='dist/NOVAVOX/ai_config.json'; d=json.load(open(p,encoding='utf-8-sig')); d['gemini_api_key']=''; json.dump(d,open(p,'w',encoding='utf-8'),ensure_ascii=False,indent=2)"
+    if errorlevel 1 (
+        echo ERREUR : impossible de retirer la cle API de la copie dist\NOVAVOX\ai_config.json.
+        echo Par securite, le build s'arrete pour eviter de livrer ta cle personnelle.
+        pause
+        exit /b 1
+    )
+    echo   -^> ai_config.json copie ^(cle API Gemini retiree pour ne pas etre distribuee^).
 )
 if exist "audio_config.json" (
     copy /y "audio_config.json" "dist\NOVAVOX\audio_config.json" >nul
